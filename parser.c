@@ -2049,6 +2049,8 @@ void pushError(error **list, char *errorName) {
 	strcpy(aux->errorMsg, errorName);
 	aux->next = (*list);
 	(*list) = aux;
+  aux = NULL;
+  free(aux);
 }
 
 void printErrors(error **list) {

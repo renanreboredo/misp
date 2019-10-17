@@ -25,6 +25,7 @@
     DEF,
     ATOM,
     COUNT,
+    CONS,
     HEAD,
     TAIL,
     NIL,
@@ -86,6 +87,7 @@
 "]"                           characters += characterCount(yytext);     printToken("VECTOREND");      return LSEND;
 "defn"                        characters += characterCount(yytext);     printToken("DEFN");           return DEFN;
 "def"                         characters += characterCount(yytext);     printToken("DEFN");           return DEFN;
+"cons"                        characters += characterCount(yytext);     printToken("CONS");           return CONS;
 "map"                         characters += characterCount(yytext);     printToken("MAP");            return MAP;
 "filter"                      characters += characterCount(yytext);     printToken("FILTER");         return FILTER;
 "count"                       characters += characterCount(yytext);     printToken("COUNT");          return COUNT;
@@ -162,6 +164,8 @@ void pushError(error **list, char *errorName) {
 	strcpy(aux->errorMsg, errorName);
 	aux->next = (*list);
 	(*list) = aux;
+  aux = NULL;
+  free(aux);
 }
 
 void printErrors(error **list) {
