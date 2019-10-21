@@ -7,7 +7,6 @@
 #define FALSE 0
 
 #define YYDEBUG TRUE
-#define TYPECONVERSIONDEBUG FALSE
 
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
@@ -23,42 +22,37 @@ extern FILE *yyin;
 int yyerror (char *s);
 int yylex ();
 
-typedef struct symbol {
-	char type[30];
-	char name[200];
-	int used;
-	int address;
-	struct symbol *next;
-} symbol;
+typedef struct tree {
+    char label[50];
+    struct tree *left;
+    struct tree *right;
+} Tree;
 
 typedef struct error {
     char errorMsg[400];
     struct error* next;
 } error;
 
-char* currentType;
-int typeConversion = FALSE;
-int leftMostIsFloat = FALSE;
 int lines = 1;
 int characters = 0;
-symbol *symbol_table = (symbol*)0;
 error *errors= (error*)0;
-error *warnings= (error*)0;
-int address = 0;
-int debug = FALSE;
+int lex = FALSE;
+int syntax = FALSE;
 
-void push_symbol(char* sym_name);
-symbol* find_symbol(char *sym_name);
+Tree* AST = NULL;
 
 void throwError(char* tkn);
-
-int characterCount(char* parsedString);
 
 void pushError(error **list, char *errorName);
 
 void printErrors(error **list);
 
 error *errorList = (error*)0;
+
+Tree* createNode(char* label, Tree* left, Tree* right);
+Tree* createLeaf(char* label);
+void printNode(Tree* node);
+void printTree(Tree* tree, int space);
 
 void printColorYellow(){
     printf("%s", KYEL);
@@ -72,141 +66,134 @@ void printColorEnd(){
     printf("%s", KNRM);
 };
 
-void push_error(error **list, char* error_name);
-void print_errors(error **list);
-int list_length(error **list);
-
-void print_symbol_table();
-void push_symbol_table (char * sym_name);
-void verify_variables_not_used();
-void verify_symbol_table (char * sym_name);
-void check_type_left_most (char * sym_name);
-void check_type_conversion(char * sym_name);
-
 %}
 %union {
-	char *atom;
 	char *val;
-	char opa;
+    char opr;
+    struct tree *node;
 }
 
 %token MAP
 %token FILTER
 %token DEFN
 %token DEF
-%token ATOM
+%token <val> ATOM
 %token COUNT
 %token CONS
 %token HEAD
 %token TAIL
 %token NIL
-%token NUM
+%token <val> NUM
 %token NOT
-%token OPR
-%token LOGOPR
-%token COMPLOGOPR
+%token <opr> OPR
+%token <val> LOGOPR
+%token <val> COMPLOGOPR
 %token READ
 %token WRITE
 %token IF
 
+%type <val> term list_iterator list_op log_opr opr
+%type <node> factor command program statements statement write read def vector element defn fnbody expr
+
 %%
 
 program: 
-    /* empty */
-    | statements
+    /* empty */ { AST = NULL; }
+    | statements { AST = $1; if(syntax) printf("\n\nAST: \n\n"); printTree(AST, 0); }
+    | error { AST = NULL; }
     ;
 
 statements: 
-    statement
-    | statement statements
+    statement { $$ = $1; }
+    | statement statements { $$ = createNode("statements", $1, $2); }
     ;
 
 statement:
-    '(' command ')'
-    | '(' write ')'
-    | '(' read ')'
-    | '(' def ')'
-    | '(' defn ')'
+        '(' command ')'   { $$ = $2; }
+    |   '(' write   ')'   { $$ = $2; }
+    |   '(' read    ')'   { $$ = $2; }
+    |   '(' def     ')'   { $$ = $2; }
+    |   '(' defn    ')'   { $$ = $2; }
     ;
 
 command:
-    opr factor factor
-    | ATOM factor factor
-    | IF expr '?' '(' command ')' '(' command ')'
-    | command '(' command ')'
-    | list_iterator ATOM vector
-    | list_op vector
-    | NIL
+    opr factor factor { $$ = createNode($1, $2, $3); }
+    | ATOM factor factor { $$ = createNode($1, $2, $3); }
+    | IF expr '?' '(' command ')' '(' command ')' { $$ = createNode("if", $2, createNode("then", $5, createNode("else", $8, NULL))); }
+    | command '(' command ')' { $$ = createNode("commandlist", $1, $3); }
+    | list_iterator ATOM vector { $$ = createNode($1, createLeaf($2), $3); }
+    | list_op vector { $$ = createNode($1, $2, NULL); }
+    | NIL { $$ = createLeaf("nil"); }
     ;
 
 list_iterator:
-    MAP
-    | FILTER
+    MAP         { $$ = "map"; }
+    | FILTER    { $$ = "filter"; }
     ;
 
 list_op:
-    HEAD
-    | TAIL
-    | CONS
-    | COUNT
+    HEAD        { $$ = "head"; }
+    | TAIL      { $$ = "tail"; }
+    | CONS      { $$ = "cons"; }
+    | COUNT     { $$ = "count"; }
     ;
 
 write:
-    WRITE command
+    WRITE '(' command ')' { $$ = createNode("write", $3, NULL); }
     ;
 
 read:
-    READ command
+    READ '(' command ')' { $$ = createNode("read", $3, NULL); }
     ;
 
 defn:
-    DEFN ATOM fnbody
+    DEFN ATOM fnbody { $$ = createNode("defn", createLeaf($2), $3); }
     ;
 
 fnbody:
-    '(' vector '(' command ')' ')' '(' fnbody ')'
-    | vector '(' command ')'
+    '(' vector '(' command ')' ')' '(' fnbody ')' { $$ = createNode("multfnbody", createNode("fnbody", $2, $4), $8); }
+    | vector '(' command ')' { $$ = createNode("fnbody", $1, $3); }
     ;
 
 def:
-    DEF ATOM factor
-    | DEF ATOM vector
+    DEF ATOM factor { $$ = createNode("def", createLeaf($2), $3); }
+    | DEF ATOM vector { $$ = createNode("def", createLeaf($2), $3); }
     ;
 
 vector:
-    '[' element ']'
+    '[' element ']' { $$ = $2; }
     ;
 
 element:
-    term
-    | term element
+    term { $$ = createNode("element", createLeaf($1), NULL); }
+    | term element { $$ = createNode("element", createLeaf($1), $2); }
     ;
 
 factor:
-    term
-    | '(' command ')'
+    term { $$ = createLeaf($1); }
+    | '(' command ')' { $$ = $2; }
     ;
 
 term:
-    ATOM
-    | NUM
+    ATOM { $$ = $1; }
+    | NUM { $$ = $1; }
     ;
 
 expr:
-    '(' log_opr factor factor ')'
-    | '(' NOT expr ')'
+    '(' log_opr factor factor ')' { $$ = createNode($2, $3, $4); }
+    | '(' NOT expr ')' { $$ = createNode("not", $3, NULL); }
     ;
 
 opr:
-    '+'
-    | '-'
-    | '*'
-    | '/'
+    '+'     { $$ = "(+)"; }
+    | '-'   { $$ = "(-)"; }
+    | '*'   { $$ = "(*)"; }
+    | '/'   { $$ = "(/)"; }
     ;
 
 log_opr:
-    LOGOPR
-    | COMPLOGOPR
+    LOGOPR          { $$ = $1; }
+    | COMPLOGOPR    { $$ = $1; }
     ;
 
 %%
@@ -225,15 +212,33 @@ int main(int argc, char* argv[]) {
     }
 
     if(argc == 3) {
-      if(!strcmp(argv[2], "--tokens")){
-        debug = TRUE;
+      if(!strcmp(argv[2], "--lex")){
+        lex = TRUE;
+      }
+    }
+
+    if(argc == 4) {
+      if(!strcmp(argv[2], "--lex")){
+        lex = TRUE;
+        printf("TOKENS: \n");
+      }
+
+      if(!strcmp(argv[3], "--syntax")){
+        syntax = TRUE;
       }
     } 
 
     if(!yyparse()) {
-      printColorGreen();
-      printf("\nFile parsed correctly\n");
-      printColorEnd();
+      if(!errors) {
+        printColorGreen();
+        printf("\nFile parsed correctly\n");
+        printColorEnd();
+      } else {
+        printf("\n\n");
+        printColorYellow();
+        printErrors(&errorList);
+        printColorEnd();    
+      }
     } else {
       printf("\n\n");
       printColorYellow();
@@ -245,9 +250,9 @@ int main(int argc, char* argv[]) {
 
 int yyerror (char *s)
 {
-    printColorYellow();
-	printf ("\n%s at line { %d }, column { %d }\n", s, lines, characters);
-    printColorEnd();
+    char errorMessage[400];
+    snprintf(errorMessage, 400, "\n%s at line { %d }, column { %d }\n", s, lines, characters);
+    pushError(&errorList, errorMessage);
     return 0;
 }
 
@@ -267,4 +272,35 @@ void printErrors(error **list) {
 		aux = aux->next;
 	}
 	printf("\n");
+}
+
+Tree* createNode(char* label, Tree* left, Tree* right) {
+    Tree* node = (Tree*) malloc(sizeof(Tree));
+    strcpy(node->label, label);
+    node->left = left;
+    node->right = right;
+    return node;
+}
+
+Tree* createLeaf(char* label) {
+    return createNode(label, NULL, NULL);
+}
+
+void printTree(Tree* tree, int space) {
+    int i;
+    if(syntax) {
+        if(tree == NULL) { return; }
+        space += 10;  
+    
+        printTree(tree->right, space);  
+    
+        printf("\n");
+        for (i = 10; i < space; i++)  { printf(" "); }  
+        printNode(tree);
+        printTree(tree->left, space);
+    } else return;
+}
+
+void printNode(Tree* node) {
+    printf("%s\n", node->label);
 }

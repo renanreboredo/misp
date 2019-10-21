@@ -71,11 +71,11 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 87 "syntax.y" /* yacc.c:1909  */
+#line 70 "syntax.y" /* yacc.c:1909  */
 
-	char *atom;
 	char *val;
-	char opa;
+    char opr;
+    struct tree *node;
 
 #line 81 "syntax.tab.h" /* yacc.c:1909  */
 };

@@ -13,7 +13,7 @@
   #define KYEL  "\x1B[33m"
 
   extern int errors;
-  extern int debug;
+  extern int lex;
   extern int lines;
   extern int characters;
 
@@ -23,7 +23,7 @@
   } error;
 
   void printToken(char* token) {
-    if(debug) printf("%s  ", token);   
+    if(lex) printf("%s  ", token);   
   }
 
   extern void pushError(error **list, char* error_name);
@@ -35,6 +35,8 @@
   extern error *errorList; 
 %}
 
+%option noinput
+%option nounput
 %x COMMENT
 
 %%
@@ -44,32 +46,32 @@
 <COMMENT>.                    ;
 
 
-([0-9]{1,})((\.)?[0-9]{1,})?  characters += characterCount(yytext);     printToken("NUM");            return NUM;
-"("                           characters += characterCount(yytext);     printToken("(");              return yytext[0];
-")"                           characters += characterCount(yytext);     printToken(")");              return yytext[0];
-"["                           characters += characterCount(yytext);     printToken("[");              return yytext[0];
-"]"                           characters += characterCount(yytext);     printToken("]");              return yytext[0];
-"defn"                        characters += characterCount(yytext);     printToken("DEFN");           return DEFN;
-"def"                         characters += characterCount(yytext);     printToken("DEF");            return DEF;
-"cons"                        characters += characterCount(yytext);     printToken("CONS");           return CONS;
-"map"                         characters += characterCount(yytext);     printToken("MAP");            return MAP;
-"filter"                      characters += characterCount(yytext);     printToken("FILTER");         return FILTER;
-"count"                       characters += characterCount(yytext);     printToken("COUNT");          return COUNT;
-"head"                        characters += characterCount(yytext);     printToken("HEAD");           return HEAD;
-"tail"                        characters += characterCount(yytext);     printToken("TAIL");           return TAIL;
-"if"                          characters += characterCount(yytext);     printToken("IF");             return IF;
-"read"                        characters += characterCount(yytext);     printToken("READ");           return READ;
-"write"                       characters += characterCount(yytext);     printToken("WRITE");          return WRITE;
-"nil"                         characters += characterCount(yytext);     printToken("NIL");            return NIL;
-"not"                         characters += characterCount(yytext);     printToken("NOT");            return NOT;
-"+"|"-"|"*"|"/"               characters += characterCount(yytext);     printToken("OPR");            return yytext[0];
-"<="|">="|"!="                characters += characterCount(yytext);     printToken("COMPLOGOPR");     return COMPLOGOPR; 
-"="|"<"|">"                   characters += characterCount(yytext);     printToken("LOGOPR");         return LOGOPR;
-[a-zA-Z][a-zA-Z0-9]*          characters += characterCount(yytext);     printToken("ATOM");           return ATOM;
-"\n"                          characters = 0;                           printToken("\n");             lines++;
-"?"                           characters += characterCount(yytext);                                   return yytext[0];
+([0-9]{1,})((\.)?[0-9]{1,})?  characters += characterCount(yytext);     printToken("NUM");          yylval.val = (char*) strdup(yytext);         return NUM;
+"("                           characters += characterCount(yytext);     printToken("(");                                                         return yytext[0];
+")"                           characters += characterCount(yytext);     printToken(")");                                                         return yytext[0];
+"["                           characters += characterCount(yytext);     printToken("[");                                                         return yytext[0];
+"]"                           characters += characterCount(yytext);     printToken("]");                                                         return yytext[0];
+"defn"                        characters += characterCount(yytext);     printToken("DEFN");                                                      return DEFN;
+"def"                         characters += characterCount(yytext);     printToken("DEF");                                                       return DEF;
+"cons"                        characters += characterCount(yytext);     printToken("CONS");                                                      return CONS;
+"map"                         characters += characterCount(yytext);     printToken("MAP");                                                       return MAP;
+"filter"                      characters += characterCount(yytext);     printToken("FILTER");                                                    return FILTER;
+"count"                       characters += characterCount(yytext);     printToken("COUNT");                                                     return COUNT;
+"head"                        characters += characterCount(yytext);     printToken("HEAD");                                                      return HEAD;
+"tail"                        characters += characterCount(yytext);     printToken("TAIL");                                                      return TAIL;
+"if"                          characters += characterCount(yytext);     printToken("IF");                                                        return IF;
+"read"                        characters += characterCount(yytext);     printToken("READ");                                                      return READ;
+"write"                       characters += characterCount(yytext);     printToken("WRITE");                                                     return WRITE;
+"nil"                         characters += characterCount(yytext);     printToken("NIL");                                                       return NIL;
+"not"                         characters += characterCount(yytext);     printToken("NOT");                                                       return NOT;
+"+"|"-"|"*"|"/"               characters += characterCount(yytext);     printToken("OPR");                                                       return yytext[0];
+"<="|">="|"!="                characters += characterCount(yytext);     printToken("COMPLOGOPR");   yylval.val = (char*) strdup(yytext);         return COMPLOGOPR; 
+"="|"<"|">"                   characters += characterCount(yytext);     printToken("LOGOPR");       yylval.val = (char*) strdup(yytext);         return LOGOPR;
+[a-zA-Z][a-zA-Z0-9]*          characters += characterCount(yytext);     printToken("ATOM");         yylval.val = (char*) strdup(yytext);         return ATOM;
+"\n"                          characters = 0;                           printToken("\n");                                                        lines++;
+"?"                           characters += characterCount(yytext);                                                                              return yytext[0];
 [ \t]+                        characters += characterCount(yytext); 
-.                             characters += characterCount(yytext);     throwLexicalError(yytext);           errors = TRUE;
+.                             characters += characterCount(yytext);     throwLexicalError(yytext);                                               errors = TRUE;
 
 %%
 
