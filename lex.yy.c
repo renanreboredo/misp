@@ -1,6 +1,5 @@
-#line 2 "parser.c"
 
-#line 4 "parser.c"
+#line 3 "lex.yy.c"
 
 #define  YY_INT_ALIGNED short int
 
@@ -502,35 +501,10 @@ char *yytext;
   #define KGRN  "\x1B[32m"
   #define KYEL  "\x1B[33m"
 
-  int debug = FALSE;
-  int errors = FALSE;
-  int lines = 1;
-  int characters = 0;
-
-  // enum token {
-  //   LSSTART = 1,
-  //   LSEND,
-  //   VECTORSTART,
-  //   VECTOREND,
-  //   MAP,
-  //   FILTER,
-  //   DEFN,
-  //   DEF,
-  //   ATOM,
-  //   COUNT,
-  //   CONS,
-  //   HEAD,
-  //   TAIL,
-  //   NIL,
-  //   NUM,
-  //   NOT,
-  //   OPR,
-  //   LOGOPR,
-  //   COMPLOGOPR,
-  //   READ,
-  //   WRITE,
-  //   IF,
-  // };
+  extern int errors;
+  extern int debug;
+  extern int lines;
+  extern int characters;
 
   typedef struct error {
 	  char errorMsg[400];
@@ -541,30 +515,16 @@ char *yytext;
     if(debug) printf("%s  ", token);   
   }
 
-  void printColorYellow(){
-    printf("%s", KYEL);
-  };
-
-  void printColorGreen(){
-    printf("%s", KGRN);
-  };
+  extern void pushError(error **list, char* error_name);
   
-  void printColorEnd(){
-    printf("%s", KNRM);
-  };
-
-  void throwError(char* tkn);
+  void throwLexicalError(char* tkn);
 
   int characterCount(char* parsedString);
 
-  void pushError(error **list, char *errorName);
-  
-  void printErrors(error **list);
+  extern error *errorList; 
+#line 526 "lex.yy.c"
 
-  error *errorList = (error*)0; 
-#line 566 "parser.c"
-
-#line 568 "parser.c"
+#line 528 "lex.yy.c"
 
 #define INITIAL 0
 #define COMMENT 1
@@ -782,10 +742,10 @@ YY_DECL
 		}
 
 	{
-#line 79 "parser.l"
+#line 40 "parser.l"
 
 
-#line 789 "parser.c"
+#line 749 "lex.yy.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -844,157 +804,157 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 81 "parser.l"
+#line 42 "parser.l"
 BEGIN(COMMENT);
 	YY_BREAK
 case 2:
 /* rule 2 can match eol */
 YY_RULE_SETUP
-#line 82 "parser.l"
-printToken("\n");    BEGIN(INITIAL);
+#line 43 "parser.l"
+BEGIN(INITIAL);
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 83 "parser.l"
+#line 44 "parser.l"
 ;
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 86 "parser.l"
+#line 47 "parser.l"
 characters += characterCount(yytext);     printToken("NUM");            return NUM;
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 87 "parser.l"
-characters += characterCount(yytext);     printToken("LSSTART");        return yytext[0];
+#line 48 "parser.l"
+characters += characterCount(yytext);     printToken("(");              return yytext[0];
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 88 "parser.l"
-characters += characterCount(yytext);     printToken("LSEND");          return yytext[0];
+#line 49 "parser.l"
+characters += characterCount(yytext);     printToken(")");              return yytext[0];
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 89 "parser.l"
-characters += characterCount(yytext);     printToken("VECTORSTART");    return yytext[0];
+#line 50 "parser.l"
+characters += characterCount(yytext);     printToken("[");              return yytext[0];
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 90 "parser.l"
-characters += characterCount(yytext);     printToken("VECTOREND");      return yytext[0];
+#line 51 "parser.l"
+characters += characterCount(yytext);     printToken("]");              return yytext[0];
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 91 "parser.l"
+#line 52 "parser.l"
 characters += characterCount(yytext);     printToken("DEFN");           return DEFN;
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 92 "parser.l"
-characters += characterCount(yytext);     printToken("DEFN");           return DEFN;
+#line 53 "parser.l"
+characters += characterCount(yytext);     printToken("DEF");            return DEF;
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 93 "parser.l"
+#line 54 "parser.l"
 characters += characterCount(yytext);     printToken("CONS");           return CONS;
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 94 "parser.l"
+#line 55 "parser.l"
 characters += characterCount(yytext);     printToken("MAP");            return MAP;
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 95 "parser.l"
+#line 56 "parser.l"
 characters += characterCount(yytext);     printToken("FILTER");         return FILTER;
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 96 "parser.l"
+#line 57 "parser.l"
 characters += characterCount(yytext);     printToken("COUNT");          return COUNT;
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 97 "parser.l"
+#line 58 "parser.l"
 characters += characterCount(yytext);     printToken("HEAD");           return HEAD;
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 98 "parser.l"
+#line 59 "parser.l"
 characters += characterCount(yytext);     printToken("TAIL");           return TAIL;
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 99 "parser.l"
+#line 60 "parser.l"
 characters += characterCount(yytext);     printToken("IF");             return IF;
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 100 "parser.l"
+#line 61 "parser.l"
 characters += characterCount(yytext);     printToken("READ");           return READ;
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 101 "parser.l"
+#line 62 "parser.l"
 characters += characterCount(yytext);     printToken("WRITE");          return WRITE;
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 102 "parser.l"
+#line 63 "parser.l"
 characters += characterCount(yytext);     printToken("NIL");            return NIL;
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 103 "parser.l"
+#line 64 "parser.l"
 characters += characterCount(yytext);     printToken("NOT");            return NOT;
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 104 "parser.l"
-characters += characterCount(yytext);     printToken("OPR");            return OPR;
+#line 65 "parser.l"
+characters += characterCount(yytext);     printToken("OPR");            return yytext[0];
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 105 "parser.l"
+#line 66 "parser.l"
 characters += characterCount(yytext);     printToken("COMPLOGOPR");     return COMPLOGOPR; 
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 106 "parser.l"
+#line 67 "parser.l"
 characters += characterCount(yytext);     printToken("LOGOPR");         return LOGOPR;
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 107 "parser.l"
+#line 68 "parser.l"
 characters += characterCount(yytext);     printToken("ATOM");           return ATOM;
 	YY_BREAK
 case 26:
 /* rule 26 can match eol */
 YY_RULE_SETUP
-#line 108 "parser.l"
+#line 69 "parser.l"
 characters = 0;                           printToken("\n");             lines++;
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 109 "parser.l"
-characters += characterCount(yytext); 
+#line 70 "parser.l"
+characters += characterCount(yytext);                                   return yytext[0];
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 110 "parser.l"
+#line 71 "parser.l"
 characters += characterCount(yytext); 
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 111 "parser.l"
-characters += characterCount(yytext);     throwError(yytext);           errors = TRUE;
+#line 72 "parser.l"
+characters += characterCount(yytext);     throwLexicalError(yytext);           errors = TRUE;
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 113 "parser.l"
+#line 74 "parser.l"
 ECHO;
 	YY_BREAK
-#line 998 "parser.c"
+#line 958 "lex.yy.c"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(COMMENT):
 	yyterminate();
@@ -2000,71 +1960,23 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 113 "parser.l"
+#line 74 "parser.l"
 
 
-int main(int argc, char* argv[]) {
-    if(argc == 1) {
-      printf("No input files\n");
-      exit(0);
-    }
-
-    yyin = fopen(argv[1], "r");
-
-    if(yyin == NULL) {
-        printf("No such file or directory\n");
-        exit(0);
-    }
-
-    if(argc == 3) {
-      if(!strcmp(argv[2], "--debug")){
-        debug = TRUE;
-      }
-    } 
-
-    yyparse();
-    
-    if(!errors) {
-      printColorGreen();
-      printf("\nFile parsed correctly\n");
-      printColorEnd();
-    } else {
-      printf("\n\n");
-      printColorYellow();
-      printErrors(&errorList);
-      printColorEnd();
-    }
-    return 0;
+int yywrap() {
+  return 1;
 }
 
 int characterCount(char* parsedString) {
   return strlen(parsedString);
 }
 
-void throwError(char* tkn) {
+void throwLexicalError(char* tkn) {
   char errorMessage[400];
   
   snprintf(errorMessage, 400, ">> token \"%s\" not recognized\n", tkn);
   pushError(&errorList, errorMessage);
   
-  snprintf(errorMessage, 400, "Lexical error at line { %d }, column { %d }\n", lines, characters);
+  snprintf(errorMessage, 400, "lexical error at line { %d }, column { %d }\n", lines, characters);
   pushError(&errorList, errorMessage);
-}
-
-void pushError(error **list, char *errorName) {
-	error *aux = (error*) malloc(sizeof(error));
-	strcpy(aux->errorMsg, errorName);
-	aux->next = (*list);
-	(*list) = aux;
-  aux = NULL;
-  free(aux);
-}
-
-void printErrors(error **list) {
-	error *aux = *list;
-	while(aux!= NULL){		
-		printf("%s\n", aux->errorMsg);
-		aux = aux->next;
-	}
-	printf("\n");
 }

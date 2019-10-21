@@ -1,23 +1,29 @@
-all: analise
+all: analise-dev
 
-analise: flex parser
+analise: bison flex misp
 
-analise-dev: flex parser-dev
+analise-dev: bison-dev flex misp-dev
+
+bison: syntax.y
+	bison syntax.y
+
+bison-dev: syntax.y
+	bison -d syntax.y --report=all
 
 flex:
-	flex -o parser.c parser.l
+	flex parser.l
 
-parser:
+misp:
 	gcc parser.c -lfl -o misp
 
-parser-dev:
-	gcc -Wall -W parser.c -lfl -o misp
+misp-dev:
+	gcc -Wall -W syntax.tab.c lex.yy.c -o misp
 
 test-all-dev:
-	./misp correto.misp --debug
-	./misp correto2.misp --debug
-	./misp errado.misp --debug
-	./misp errado2.misp --debug
+	./misp correto.misp --tokens
+	./misp correto2.misp --tokens
+	./misp errado.misp --tokens
+	./misp errado2.misp --tokens
 
 test-all:
 	./misp correto.misp
