@@ -71,7 +71,7 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 70 "syntax.y" /* yacc.c:1909  */
+#line 117 "syntax.y" /* yacc.c:1909  */
 
 	char *val;
     char opr;

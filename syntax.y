@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include "uthash.h"
 
 #define TRUE 1
 #define FALSE 0
@@ -28,6 +29,12 @@ typedef struct tree {
     struct tree *right;
 } Tree;
 
+typedef struct symbol {
+    char atom[50];
+    int id;
+    UT_hash_handle hh;
+} Symbol;
+
 typedef struct error {
     char errorMsg[400];
     struct error* next;
@@ -38,8 +45,11 @@ int characters = 0;
 error *errors= (error*)0;
 int lex = FALSE;
 int syntax = FALSE;
+int hasSymbols = FALSE;
 
 Tree* AST = NULL;
+Symbol* symbolTable = NULL;
+int symbolID = 0;
 
 void throwError(char* tkn);
 
@@ -53,6 +63,43 @@ Tree* createNode(char* label, Tree* left, Tree* right);
 Tree* createLeaf(char* label);
 void printNode(Tree* node);
 void printTree(Tree* tree, int space);
+
+Symbol* findAtom(char* atom) {
+    Symbol* s = (Symbol*) malloc(sizeof(Symbol));
+    HASH_FIND_STR(symbolTable, atom, s);
+    return s;
+}
+
+void addAtom(char* atom) {
+    Symbol* s = (Symbol*) malloc(sizeof(Symbol));
+    strcpy(s->atom, atom);
+    s->id = symbolID++;
+    HASH_ADD_STR(symbolTable, atom, s);
+    if(!hasSymbols) { hasSymbols = TRUE; }
+}
+
+
+void printDelimiter() {
+    printf("\n--------------------------------------------------------------------------\n\n");
+}
+
+void printSymbolTable() {
+    if(hasSymbols) {
+        Symbol *tmp = NULL;
+        Symbol* s = (Symbol*) malloc(sizeof(Symbol));
+        
+        printDelimiter();
+        printf("SYMBOL TABLE: \n\n");
+
+        printf("|\tatom\t|\tid\t|\n\n");
+
+        HASH_ITER(hh, symbolTable, s, tmp) {
+            printf("|\t%s\t|\t%d\t|\n", s->atom, s->id);
+            HASH_DEL(symbolTable, s);
+            free(s);
+        }
+    } else return;
+}
 
 void printColorYellow(){
     printf("%s", KYEL);
@@ -99,7 +146,7 @@ void printColorEnd(){
 
 program: 
     /* empty */ { AST = NULL; }
-    | statements { AST = $1; if(syntax) printf("\n\nAST: \n\n"); printTree(AST, 0); }
+    | statements { AST = $1; if(syntax) { printDelimiter(); printf("\n\nAST: \n\n"); printTree(AST, 0); printSymbolTable(); } }
     | error { AST = NULL; }
     ;
 
@@ -175,7 +222,7 @@ factor:
     ;
 
 term:
-    ATOM { $$ = $1; }
+    ATOM { addAtom($1); $$ = $1; }
     | NUM { $$ = $1; }
     ;
 

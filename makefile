@@ -1,11 +1,11 @@
-all: analise-dev
+all: analise
 
 analise: bison flex misp
 
 analise-dev: bison-dev flex misp-dev
 
 bison: syntax.y
-	bison syntax.y
+	bison -d syntax.y
 
 bison-dev: syntax.y
 	bison -d syntax.y --report=all
@@ -14,7 +14,7 @@ flex:
 	flex parser.l
 
 misp:
-	gcc parser.c -lfl -o misp
+	gcc syntax.tab.c lex.yy.c -o misp
 
 misp-dev:
 	gcc -Wall -W syntax.tab.c lex.yy.c -o misp
