@@ -1,6 +1,6 @@
 all: analise
 
-analise: bison flex misp
+analise: bison flex misp-prd
 
 analise-dev: bison-dev flex misp-dev
 
@@ -13,7 +13,7 @@ bison-dev: syntax.y
 flex:
 	flex parser.l
 
-misp:
+misp-prd:
 	gcc syntax.tab.c lex.yy.c -o misp
 
 misp-dev:
@@ -31,3 +31,6 @@ test-all:
 	./misp correto2.misp
 	./misp errado.misp
 	./misp errado2.misp
+
+clean:
+	rm -rf	syntax.tab.c lex.yy.c misp syntax.tab.h
