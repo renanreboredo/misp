@@ -340,11 +340,16 @@ void printTree(Tree* tree, int space) {
         space += 10;  
     
         printTree(tree->right, space);  
-    
+    	// tree->right = NULL;
+	// free(tree->right);
         printf("\n");
         for (i = 10; i < space; i++)  { printf(" "); }  
         printNode(tree);
         printTree(tree->left, space);
+	// tree->left = NULL;
+	// free(tree->left);
+	// tree = NULL;
+	// free(tree);
     } else return;
 }
 
