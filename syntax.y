@@ -29,6 +29,11 @@ typedef struct tree {
     struct tree *right;
 } Tree;
 
+typedef struct attr {
+    struct tree *node;
+    int params;
+} Attr;
+
 typedef struct symbol {
     char atom[50];
     int id;
@@ -41,6 +46,7 @@ typedef struct error {
 } error;
 
 int lines = 1;
+int arity = 0;
 int characters = 0;
 error *errors= (error*)0;
 int lex = FALSE;
@@ -80,7 +86,7 @@ void addAtom(char* atom) {
 
 
 void printDelimiter() {
-    printf("\n----------------------------------penis----------------------------------------\n\n");
+    printf("\n--------------------------------------------------------------------------\n\n");
 }
 
 void printSymbolTable() {
@@ -118,6 +124,7 @@ void printColorEnd(){
 	char *val;
     char opr;
     struct tree *node;
+    struct attr *synth;
 }
 
 %token MAP
@@ -141,6 +148,7 @@ void printColorEnd(){
 
 %type <val> term list_iterator list_op log_opr opr
 %type <node> factor command program statements statement write read def vector element defn fnbody expr
+%type <synth> fnbody
 
 %%
 
