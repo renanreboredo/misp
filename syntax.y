@@ -24,7 +24,7 @@ int yyerror (char *s);
 int yylex ();
 
 typedef struct tree {
-    char label[50];
+    char label[100];
     struct tree *left;
     struct tree *right;
 } Tree;
@@ -52,6 +52,7 @@ error *errors= (error*)0;
 int lex = FALSE;
 int syntax = FALSE;
 int hasSymbols = FALSE;
+struct tree *aux = (Tree*)0;
 
 Tree* AST = NULL;
 Symbol* symbolTable = NULL;
@@ -123,8 +124,8 @@ void printColorEnd(){
 %union {
 	char *val;
     char opr;
+    struct attr *atrib;
     struct tree *node;
-    struct attr *synth;
 }
 
 %token MAP
@@ -147,8 +148,8 @@ void printColorEnd(){
 %token IF
 
 %type <val> term list_iterator list_op log_opr opr
-%type <node> factor command program statements statement write read def vector element defn fnbody expr
-%type <synth> fnbody
+%type <atrib> vector
+%type <node> factor command program statements statement write read def defn fnbody element expr
 
 %%
 
@@ -172,12 +173,12 @@ statement:
     ;
 
 command:
-    opr factor factor { $$ = createNode($1, $2, $3); }
+    opr factor factor { $$ = createNode((char*) strdup($1), $2, $3); }
     | ATOM factor factor { $$ = createNode($1, $2, $3); }
     | IF expr '?' '(' command ')' '(' command ')' { $$ = createNode("if", $2, createNode("then", $5, createNode("else", $8, NULL))); }
     | command '(' command ')' { $$ = createNode("commandlist", $1, $3); }
-    | list_iterator ATOM vector { $$ = createNode($1, createLeaf($2), $3); }
-    | list_op vector { $$ = createNode($1, $2, NULL); }
+    | list_iterator ATOM vector { $$ = createNode($1, createLeaf($2), $3->node); }
+    | list_op vector { $$ = createNode($1, $2->node, NULL); }
     | NIL { $$ = createLeaf("nil"); }
     ;
 
@@ -206,22 +207,22 @@ defn:
     ;
 
 fnbody:
-    '(' vector '(' command ')' ')' '(' fnbody ')' { $$ = createNode("multfnbody", createNode("fnbody", $2, $4), $8); }
-    | vector '(' command ')' { $$ = createNode("fnbody", $1, $3); }
+    '(' vector '(' command ')' ')' '(' fnbody ')' { $$ = createNode("multfnbody", createNode("fnbody", $2->node, $4), $8); }
+    | vector '(' command ')' { ($$) = (Tree*) createNode("fnbody", $1->node, $3); }
     ;
 
 def:
     DEF ATOM factor { $$ = createNode("def", createLeaf($2), $3); }
-    | DEF ATOM vector { $$ = createNode("def", createLeaf($2), $3); }
+    | DEF ATOM vector { $$ = createNode("def", createLeaf($2), $3->node); }
     ;
 
 vector:
-    '[' element ']' { $$ = $2; }
+    '[' element ']' { $$->node = (Tree*) $2; $$->params = arity; arity = 0; }
     ;
 
 element:
-    term { $$ = createNode("element", createLeaf($1), NULL); }
-    | term element { $$ = createNode("element", createLeaf($1), $2); }
+    term { $$ = (Tree*) createNode("element", createLeaf($1), NULL);  arity += 1; }
+    | term element { $$ = (Tree*) createNode("element", createLeaf($1), $2);  arity += 1; }
     ;
 
 factor:
@@ -230,7 +231,7 @@ factor:
     ;
 
 term:
-    ATOM { addAtom($1); $$ = $1; }
+    ATOM { $$ = $1; }
     | NUM { $$ = $1; }
     ;
 
@@ -343,22 +344,20 @@ Tree* createLeaf(char* label) {
 
 void printTree(Tree* tree, int space) {
     int i;
-    if(syntax) {
-        if(tree == NULL) { return; }
-        space += 10;  
-    
-        printTree(tree->right, space);  
-    	// tree->right = NULL;
-	// free(tree->right);
-        printf("\n");
-        for (i = 10; i < space; i++)  { printf(" "); }  
-        printNode(tree);
-        printTree(tree->left, space);
-	// tree->left = NULL;
-	// free(tree->left);
-	// tree = NULL;
-	// free(tree);
-    } else return;
+    if(tree == NULL) { return; }
+    space += 10;  
+
+    printTree(tree->right, space);  
+    tree->right = NULL;
+    free(tree->right);
+    if(syntax) { printf("\n"); }
+    for (i = 10; i < space; i++)  { if(syntax) printf(" "); }  
+    if(syntax) { printNode(tree); }
+    printTree(tree->left, space);
+    tree->left = NULL;
+    free(tree->left);
+    tree = NULL;
+    free(tree);
 }
 
 void printNode(Tree* node) {

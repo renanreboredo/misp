@@ -8,7 +8,7 @@ bison: syntax.y
 	bison -d syntax.y
 
 bison-dev: syntax.y
-	bison -d syntax.y --report=all
+	bison -d -g syntax.y --report=all
 
 flex:
 	flex parser.l
