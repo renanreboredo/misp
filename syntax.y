@@ -48,6 +48,7 @@ typedef struct error {
 int lines = 1;
 int arity = 0;
 int characters = 0;
+char* sym;
 error *errors= (error*)0;
 int lex = FALSE;
 int syntax = FALSE;
@@ -124,7 +125,7 @@ void printColorEnd(){
 	char *val;
     char opr;
     struct tree *node;
-    struct attr *synth;
+    struct attr *atrib;
 }
 
 %token MAP
@@ -147,8 +148,8 @@ void printColorEnd(){
 %token IF
 
 %type <val> term list_iterator list_op log_opr opr
-%type <node> factor command program statements statement write read def vector element defn fnbody expr
-%type <synth> fnbody
+%type <node> factor command program statements statement write read def element defn fnbody expr
+%type <atrib> vector
 
 %%
 
@@ -202,12 +203,12 @@ read:
     ;
 
 defn:
-    DEFN ATOM fnbody { $$ = createNode("defn", createLeaf($2), $3); }
+    DEFN ATOM { sym = (char*) strdup($2); } fnbody { $$ = createNode("defn", createLeaf($2), $4); }
     ;
 
 fnbody:
-    '(' vector '(' command ')' ')' '(' fnbody ')' { $$ = createNode("multfnbody", createNode("fnbody", $2, $4), $8); }
-    | vector '(' command ')' { $$ = createNode("fnbody", $1, $3); }
+    '(' vector '(' command ')' ')' '(' fnbody ')' { $$ = createNode("multfnbody", createNode("fnbody", $2->node, $4), $8); }
+    | vector '(' command ')' { ($$) = (Tree*) createNode("fnbody", $1->node, $3); printf("Aridade de %s: %d", sym, $1->params); }
     ;
 
 def:
