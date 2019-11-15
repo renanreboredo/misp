@@ -1,0 +1,6 @@
+(defn sum
+([x] (/ x 2))
+([x y] (+ x y))
+)
+
+(map minus [1 x 3 4 5])

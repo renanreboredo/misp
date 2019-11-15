@@ -3,4 +3,6 @@
 ([x y] (+ x y))
 )
 
+(defn sum [x y z] (+ x (sum y z)))
+
 (map sum [1 x 3 4 5])
