@@ -31,7 +31,7 @@ typedef struct tree {
 } Tree;
 
 typedef struct attr {
-    struct tree *node;
+    Tree* node;
     int params;
 } Attr;
 
@@ -204,8 +204,8 @@ command:
     | IF expr '?' '(' command ')' '(' command ')' { $$ = createNode("if", $2, createNode("then", $5, createNode("else", $8, NULL))); }
     | command '(' command ')' { $$ = createNode("commandlist", $1, $3); }
     | list_iterator ATOM { sym = (char*) strdup($2); } vector { 
-                                                                $$ = createNode($1, createLeaf($2), $4->node);
-                                                                checkArity(sym, 1); 
+                                                                $$ = createNode($1, createLeaf(sym), $4->node);
+                                                                checkArity(sym, 1);
                                                               }
     | list_op vector { $$ = createNode($1, $2->node, NULL); }
     | NIL { $$ = createLeaf("nil"); }
@@ -232,7 +232,7 @@ read:
     ;
 
 defn:
-    DEFN ATOM { sym = (char*) strdup($2); } fnbody { $$ = createNode("defn", createLeaf($2), $4); }
+    DEFN ATOM { sym = (char*) strdup($2); } fnbody { $$ = createNode("defn", createLeaf(sym), $4); }
     ;
 
 fnbody:
@@ -250,20 +250,20 @@ fnbody:
 
 def:
     DEF ATOM factor { $$ = createNode("def", createLeaf($2), $3); }
-    | DEF ATOM vector { $$ = createNode("def", createLeaf($2), $3->node); }
+    | DEF ATOM vector { $$ = createNode("def", createLeaf($2), $3->node); printf("ARIDADE: %d\n", $3->params); }
     ;
 
 vector:
-    '[' element ']' { $$->node = (Tree*) $2; $$->params = arity; arity = 0; }
+    '[' element ']' { $$->node = (Tree*) malloc(sizeof(Tree)); $$->node = (Tree*) $2; $$->params = arity; arity = 0; }
     ;
 
 element:
     term { 
-            $$ = (Tree*) createNode("element", createLeaf($1), NULL);
+            $$ = createNode("element", createLeaf($1), NULL);
             arity += 1;
          }
     | term element { 
-                    $$ = (Tree*) createNode("element", createLeaf($1), $2);
+                    $$ = createNode("element", createLeaf($1), $2);
                     arity += 1;
                    }
     ;
