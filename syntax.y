@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "uthash.h"
+#include "interpreter.h"
 
 #define TRUE 1
 #define FALSE 0
@@ -38,6 +39,11 @@ typedef struct attr {
 typedef struct symbol {
     int id;
     char atom[60];
+    union {
+        Program *subroutine;
+        int value;
+        int *vector;
+    } data;
     UT_hash_handle hh;
 } Symbol;
 
@@ -134,6 +140,10 @@ void printSymbolTable() {
     } else return;
 }
 
+void printColorRed(){
+    printf("%s", KRED);
+};
+
 void printColorYellow(){
     printf("%s", KYEL);
 };
@@ -180,169 +190,318 @@ void printColorEnd(){
 %%
 
 program: 
-    /* empty */ { AST = NULL; }
-    | statements { AST = $1; if(syntax) { printDelimiter(); printf("\n\nAST: \n\n"); printTree(AST, 0); printSymbolTable(); } }
-    | error { AST = NULL; }
+    /* empty */
+    {
+        AST = NULL;
+    }
+    | statements
+    { 
+        AST = $1;
+        if(syntax) { 
+            if (lex) { printDelimiter(); }
+            printf("\n\nAST: \n\n");
+            printTree(AST, 0);
+            printSymbolTable();
+        }
+    }
+    | error
+    {
+        AST = NULL;
+    }
     ;
 
 statements: 
-    statement { $$ = $1; }
-    | statement statements { $$ = createNode("statements", $1, $2); }
+    statement
+    {
+        $$ = $1;
+    }
+    | statement statements
+    {
+        $$ = createNode("statements", $1, $2);
+    }
     ;
 
 statement:
-        '(' command ')'   { $$ = $2; }
-    |   '(' write   ')'   { $$ = $2; }
-    |   '(' read    ')'   { $$ = $2; }
-    |   '(' def     ')'   { $$ = $2; }
-    |   '(' defn    ')'   { $$ = $2; }
+        '('  command ')'   { $$ = $2; }
+    |   '('  write   ')'   { $$ = $2; }
+    |   '('  read    ')'   { $$ = $2; }
+    |   '('  def     ')'   { $$ = $2; }
+    |   '('  defn    ')'   { $$ = $2; }
     ;
 
 command:
-    opr factor factor { $$ = createNode((char*) strdup($1), $2, $3); }
-    | ATOM factor factor { $$ = createNode($1, $2, $3); }
-    | IF expr '?' '(' command ')' '(' command ')' { $$ = createNode("if", $2, createNode("then", $5, createNode("else", $8, NULL))); }
-    | command '(' command ')' { $$ = createNode("commandlist", $1, $3); }
-    | list_iterator ATOM { sym = (char*) strdup($2); } vector { 
-                                                                $$ = createNode($1, createLeaf(sym), $4->node);
-                                                                checkArity(sym, 1);
-                                                              }
-    | list_op vector { $$ = createNode($1, $2->node, NULL); }
-    | NIL { $$ = createLeaf("nil"); }
+    opr factor factor
+    {
+        $$ = createNode((char*) strdup($1), $2, $3);
+    }
+    
+    | ATOM factor factor
+    {
+        $$ = createNode($1, $2, $3);
+    }
+    
+    | IF expr '?' '(' command ')' '(' command ')'
+    { 
+        $$ = createNode("if", $2, createNode("then", $5, createNode("else", $8, NULL)));
+    }
+    
+    | command '(' command ')'
+    { 
+        $$ = createNode("commandlist", $1, $3);
+    }
+    
+    | list_iterator ATOM { sym = (char*) strdup($2); } vector 
+    { 
+        $$ = createNode($1, createLeaf(sym), $4->node);
+        checkArity(sym, 1);
+    }
+    
+    | list_op vector
+    {
+        $$ = createNode($1, $2->node, NULL);
+    }
+    
+    | NIL
+    {
+        $$ = createLeaf("nil");
+    }
     ;
 
 list_iterator:
-    MAP         { $$ = "map"; }
-    | FILTER    { $$ = "filter"; }
+    MAP
+    {
+        $$ = "map";
+    }
+    
+    | FILTER
+    {
+        $$ = "filter";
+    }
     ;
 
 list_op:
-    HEAD        { $$ = "head"; }
-    | TAIL      { $$ = "tail"; }
-    | CONS      { $$ = "cons"; }
-    | COUNT     { $$ = "count"; }
+    HEAD
+    {
+        $$ = "head";
+    }
+    
+    | TAIL
+    {
+        $$ = "tail";
+    }
+    
+    | CONS
+    {
+        $$ = "cons";
+    }
+    
+    | COUNT
+    {
+        $$ = "count";
+    }
     ;
 
 write:
-    WRITE '(' command ')' { $$ = createNode("write", $3, NULL); }
+    WRITE '(' command ')'
+    {
+        $$ = createNode("write", $3, NULL);
+    }
     ;
 
 read:
-    READ '(' command ')' { $$ = createNode("read", $3, NULL); }
+    READ '(' command ')'
+    {
+        $$ = createNode("read", $3, NULL);
+    }
     ;
 
 defn:
-    DEFN ATOM { sym = (char*) strdup($2); } fnbody { $$ = createNode("defn", createLeaf(sym), $4); }
+    DEFN ATOM { sym = (char*) strdup($2); } fnbody
+    { 
+        $$ = createNode("defn", createLeaf(sym), $4);
+    }
     ;
 
 fnbody:
-    '(' vector '(' command ')' ')' '(' fnbody ')' { 
-                                                    snprintf(anotation, 60, "aridade->%d", $2->params);
-                                                    $$ = createNode("multfnbody", createAnotatedNode("fnbody", $2->node, $4, anotation), $8);
-                                                    addAtom(createFnAtom(sym, $2->params));
-                                                  }
-    | vector '(' command ')' { 
-                                snprintf(anotation, 60, "aridade->%d", $1->params);
-                                ($$) = (Tree*) createAnotatedNode("fnbody", $1->node, $3, anotation);
-                                addAtom(createFnAtom(sym, $1->params));
-                             }
+    '(' vector '(' command ')' ')' '(' fnbody ')'
+    { 
+        snprintf(anotation, 60, "aridade->%d", $2->params);
+        $$ = createNode("multfnbody", createAnotatedNode("fnbody", $2->node, $4, anotation), $8);
+        addAtom(createFnAtom(sym, $2->params));
+    }
+    
+    | vector '(' command ')'
+    { 
+        snprintf(anotation, 60, "aridade->%d", $1->params);
+        ($$) = (Tree*) createAnotatedNode("fnbody", $1->node, $3, anotation);
+        addAtom(createFnAtom(sym, $1->params));
+    }
     ;
 
 def:
-    DEF ATOM factor { $$ = createNode("def", createLeaf($2), $3); }
-    | DEF ATOM vector { $$ = createNode("def", createLeaf($2), $3->node); printf("ARIDADE: %d\n", $3->params); }
+    DEF ATOM factor
+    {
+        $$ = createNode("def", createLeaf($2), $3);
+    }
+    
+    | DEF ATOM vector
+    {
+        $$ = createNode("def", createLeaf($2), $3->node); printf("ARIDADE: %d\n", $3->params);
+    }
     ;
 
 vector:
-    '[' element ']' { $$->node = (Tree*) malloc(sizeof(Tree)); $$->node = (Tree*) $2; $$->params = arity; arity = 0; }
+    '[' element ']'
+    {
+        $$->node = (Tree*) malloc(sizeof(Tree));
+        $$->node = (Tree*) $2;
+        $$->params = arity; arity = 0;
+    }
     ;
 
 element:
-    term { 
-            $$ = createNode("element", createLeaf($1), NULL);
-            arity += 1;
-         }
-    | term element { 
-                    $$ = createNode("element", createLeaf($1), $2);
-                    arity += 1;
-                   }
+    term
+    { 
+        $$ = createNode("element", createLeaf($1), NULL);
+        arity += 1;
+    }
+    
+    | term element
+    { 
+        $$ = createNode("element", createLeaf($1), $2);
+        arity += 1;
+    }
     ;
 
 factor:
-    term { $$ = createLeaf($1); }
-    | '(' command ')' { $$ = $2; }
+    term
+    {
+        $$ = createLeaf($1);
+    }
+    
+    | '(' command ')'
+    {
+        $$ = $2;
+    }
     ;
 
 term:
-    ATOM { $$ = $1; }
-    | NUM { $$ = $1; }
+    ATOM
+    {
+        $$ = $1;
+    }
+    
+    | NUM
+    {
+        $$ = $1;
+    }
     ;
 
 expr:
-    '(' log_opr factor factor ')' { $$ = createNode($2, $3, $4); }
-    | '(' NOT expr ')' { $$ = createNode("not", $3, NULL); }
+    '(' log_opr factor factor ')'
+    {
+        $$ = createNode($2, $3, $4);
+    }
+    
+    | '(' NOT expr ')'
+    {
+        $$ = createNode("not", $3, NULL);
+    }
     ;
 
 opr:
-    '+'     { $$ = "(+)"; }
-    | '-'   { $$ = "(-)"; }
-    | '*'   { $$ = "(*)"; }
-    | '/'   { $$ = "(/)"; }
+    '+'
+    {
+        $$ = "(+)";
+    }
+    
+    | '-'
+    {
+        $$ = "(-)";
+    }
+    
+    | '*'
+    {
+        $$ = "(*)";
+    }
+    
+    | '/'
+    {
+        $$ = "(/)";
+    }
     ;
 
 log_opr:
-    LOGOPR          { $$ = $1; }
-    | COMPLOGOPR    { $$ = $1; }
+    LOGOPR
+    {
+        $$ = $1;
+    }
+    
+    | COMPLOGOPR
+    {
+        $$ = $1;
+    }
     ;
 
 %%
 
 int main(int argc, char* argv[]) {
-    if(argc == 1) {
-      printf("No input files\n");
-      exit(0);
+    if (argc == 1) {
+        printColorRed();
+        printf("No input file\n");
+        printColorEnd();
+        exit(-1);
     }
 
-    yyin = fopen(argv[1], "r");
+    if (argc == 2) {
+        yyin = fopen(argv[1], "r");
 
-    if(yyin == NULL) {
-        printf("No such file or directory\n");
-        exit(0);
+        if(yyin == NULL) {
+            printf("No such file or directory\n");
+            exit(0);
+        }
     }
 
-    if(argc == 3) {
-      if(!strcmp(argv[2], "--lex")){
-        lex = TRUE;
-      }
+    if (argc == 3) {
+        if(!strcmp(argv[2], "--lex")){
+            lex = TRUE;
+        } else if(!strcmp(argv[2], "--syntax")) {
+            syntax = TRUE;
+        }
     }
 
-    if(argc == 4) {
-      if(!strcmp(argv[2], "--lex")){
-        lex = TRUE;
-        printf("TOKENS: \n");
-      }
+    if (argc == 4) {
+        if(!strcmp(argv[2], "--lex")){
+            lex = TRUE;
+            printf("TOKENS: \n\n");
+        } else if(!strcmp(argv[2], "--syntax")) {
+            syntax = TRUE;
+        }
 
-      if(!strcmp(argv[3], "--syntax")){
-        syntax = TRUE;
-      }
+        if(!strcmp(argv[3], "--syntax")){
+            syntax = TRUE;
+        } else if(!strcmp(argv[3], "--lex") && syntax) {
+            lex = TRUE;
+            printf("TOKENS: \n\n");
+        }
     } 
 
-    if(!yyparse()) {
-      if(!errorList) {
-        printColorGreen();
-        printf("\nFile parsed correctly\n");
-        printColorEnd();
-      } else {
+    if (!yyparse()) {
+        if (!errorList) {
+            printColorGreen();
+            printf("\nFile parsed correctly\n");
+            printColorEnd();
+        } else {
+            printf("\n\n");
+            printColorYellow();
+            printErrors(&errorList);
+            printColorEnd();    
+        }
+    } else {
         printf("\n\n");
         printColorYellow();
         printErrors(&errorList);
-        printColorEnd();    
-      }
-    } else {
-      printf("\n\n");
-      printColorYellow();
-      printErrors(&errorList);
-      printColorEnd();
+        printColorEnd();
     }
     fclose(yyin);
     return 0;
