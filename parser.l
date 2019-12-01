@@ -3,6 +3,7 @@
   #include<stdlib.h>
   #include<string.h>
   #include "syntax.tab.h"
+  #include "interpreter.h"
   
   #define TRUE 1
   #define FALSE 0
@@ -16,6 +17,15 @@
   extern int lex;
   extern int lines;
   extern int characters;
+  typedef struct tree Tree;
+  typedef struct tree {
+    char label[100];
+    Tree *left;
+    Tree *right;
+    int params;
+    Program *code;
+    char attrs[100];
+  } Tree;
 
   typedef struct error {
 	  char errorMsg[400];
@@ -46,32 +56,32 @@
 <COMMENT>.                    ;
 
 
-([0-9]{1,})((\.)?[0-9]{1,})?  characters += characterCount(yytext);     printToken("NUM");          yylval.val = (char*) strdup(yytext);         return NUM;
-"("                           characters += characterCount(yytext);     printToken("(");                                                         return yytext[0];
-")"                           characters += characterCount(yytext);     printToken(")");                                                         return yytext[0];
-"["                           characters += characterCount(yytext);     printToken("[");                                                         return yytext[0];
-"]"                           characters += characterCount(yytext);     printToken("]");                                                         return yytext[0];
-"defn"                        characters += characterCount(yytext);     printToken("DEFN");                                                      return DEFN;
-"def"                         characters += characterCount(yytext);     printToken("DEF");                                                       return DEF;
-"cons"                        characters += characterCount(yytext);     printToken("CONS");                                                      return CONS;
-"map"                         characters += characterCount(yytext);     printToken("MAP");                                                       return MAP;
-"filter"                      characters += characterCount(yytext);     printToken("FILTER");                                                    return FILTER;
-"count"                       characters += characterCount(yytext);     printToken("COUNT");                                                     return COUNT;
-"head"                        characters += characterCount(yytext);     printToken("HEAD");                                                      return HEAD;
-"tail"                        characters += characterCount(yytext);     printToken("TAIL");                                                      return TAIL;
-"if"                          characters += characterCount(yytext);     printToken("IF");                                                        return IF;
-"read"                        characters += characterCount(yytext);     printToken("READ");                                                      return READ;
-"write"                       characters += characterCount(yytext);     printToken("WRITE");                                                     return WRITE;
-"nil"                         characters += characterCount(yytext);     printToken("NIL");                                                       return NIL;
-"not"                         characters += characterCount(yytext);     printToken("NOT");                                                       return NOT;
-"+"|"-"|"*"|"/"               characters += characterCount(yytext);     printToken("OPR");                                                       return yytext[0];
-"<="|">="|"!="                characters += characterCount(yytext);     printToken("COMPLOGOPR");   yylval.val = (char*) strdup(yytext);         return COMPLOGOPR; 
-"="|"<"|">"                   characters += characterCount(yytext);     printToken("LOGOPR");       yylval.val = (char*) strdup(yytext);         return LOGOPR;
-[a-zA-Z][a-zA-Z0-9]*          characters += characterCount(yytext);     printToken("ATOM");         yylval.val = (char*) strdup(yytext);         return ATOM;
-"\n"                          characters = 0;                           printToken("\n");                                                        lines++;
-"?"                           characters += characterCount(yytext);                                                                              return yytext[0];
+([0-9]{1,})((\.)?[0-9]{1,})?  characters += characterCount(yytext);     printToken("NUM");         yylval.node = (Tree*) malloc(sizeof(Tree));                  strcpy(yylval.node->label, (char*) strdup(yytext));          return NUM;
+"("                           characters += characterCount(yytext);     printToken("(");                                                                        return yytext[0];
+")"                           characters += characterCount(yytext);     printToken(")");                                                                        return yytext[0];
+"["                           characters += characterCount(yytext);     printToken("[");                                                                        return yytext[0];
+"]"                           characters += characterCount(yytext);     printToken("]");                                                                        return yytext[0];
+"defn"                        characters += characterCount(yytext);     printToken("DEFN");                                                                     return DEFN;
+"def"                         characters += characterCount(yytext);     printToken("DEF");                                                                      return DEF;
+"cons"                        characters += characterCount(yytext);     printToken("CONS");                                                                     return CONS;
+"map"                         characters += characterCount(yytext);     printToken("MAP");                                                                      return MAP;
+"filter"                      characters += characterCount(yytext);     printToken("FILTER");                                                                   return FILTER;
+"count"                       characters += characterCount(yytext);     printToken("COUNT");                                                                    return COUNT;
+"head"                        characters += characterCount(yytext);     printToken("HEAD");                                                                     return HEAD;
+"tail"                        characters += characterCount(yytext);     printToken("TAIL");                                                                     return TAIL;
+"if"                          characters += characterCount(yytext);     printToken("IF");                                                                       return IF;
+"read"                        characters += characterCount(yytext);     printToken("READ");                                                                     return READ;
+"write"                       characters += characterCount(yytext);     printToken("WRITE");                                                                    return WRITE;
+"nil"                         characters += characterCount(yytext);     printToken("NIL");                                                                      return NIL;
+"not"                         characters += characterCount(yytext);     printToken("NOT");                                                                      return NOT;
+"+"|"-"|"*"|"/"               characters += characterCount(yytext);     printToken("OPR");                                                                      return yytext[0];
+"<="|">="|"!="                characters += characterCount(yytext);     printToken("COMPLOGOPR");   yylval.val = (char*) strdup(yytext);                        return COMPLOGOPR; 
+"="|"<"|">"                   characters += characterCount(yytext);     printToken("LOGOPR");       yylval.val = (char*) strdup(yytext);                        return LOGOPR;
+[a-zA-Z][a-zA-Z0-9]*          characters += characterCount(yytext);     printToken("ATOM");         yylval.node = (Tree*) malloc(sizeof(Tree));                 strcpy(yylval.node->label, (char*) strdup(yytext));         return ATOM;
+"\n"                          characters = 0;                           printToken("\n");                                                                       lines++;
+"?"                           characters += characterCount(yytext);                                                                                             return yytext[0];
 [ \t]+                        characters += characterCount(yytext); 
-.                             characters += characterCount(yytext);     throwLexicalError(yytext);                                               errors = TRUE;
+.                             characters += characterCount(yytext);     throwLexicalError(yytext);                                                              errors = TRUE;
 
 %%
 

@@ -4,37 +4,30 @@
 #include <stdlib.h>
 #include "uthash.h"
 #include "interpreter.h"
+#include "util.h"
 
 #define TRUE 1
 #define FALSE 0
 
 #define YYDEBUG TRUE
 
-#define KNRM  "\x1B[0m"
-#define KRED  "\x1B[31m"
-#define KGRN  "\x1B[32m"
-#define KYEL  "\x1B[33m"
-#define KBLU  "\x1B[34m"
-#define KMAG  "\x1B[35m"
-#define KCYN  "\x1B[36m"
-#define KWHT  "\x1B[37m"
-
 extern int yydebug;
 extern FILE *yyin;
 int yyerror (char *s);
 int yylex ();
 
+typedef struct tree Tree;
+typedef struct symbol Symbol;
+typedef struct error Error;
+
 typedef struct tree {
     char label[100];
-    struct tree *left;
-    struct tree *right;
+    Tree *left;
+    Tree *right;
+    int params;
+    Program *code;
     char attrs[100];
 } Tree;
-
-typedef struct attr {
-    Tree* node;
-    int params;
-} Attr;
 
 typedef struct symbol {
     int id;
@@ -123,7 +116,7 @@ void printDelimiter() {
 }
 
 void printSymbolTable() {
-    if(hasSymbols) {
+    if (hasSymbols) {
         Symbol *tmp = NULL;
         Symbol* s = (Symbol*) malloc(sizeof(Symbol));
         
@@ -140,27 +133,10 @@ void printSymbolTable() {
     } else return;
 }
 
-void printColorRed(){
-    printf("%s", KRED);
-};
-
-void printColorYellow(){
-    printf("%s", KYEL);
-};
-
-void printColorGreen(){
-    printf("%s", KGRN);
-};
-
-void printColorEnd(){
-    printf("%s", KNRM);
-};
-
 %}
 %union {
 	char *val;
     char opr;
-    struct attr *atrib;
     struct tree *node;
 }
 
@@ -168,13 +144,13 @@ void printColorEnd(){
 %token FILTER
 %token DEFN
 %token DEF
-%token <val> ATOM
+%token <node> ATOM
 %token COUNT
 %token CONS
 %token HEAD
 %token TAIL
 %token NIL
-%token <val> NUM
+%token <node> NUM
 %token NOT
 %token <opr> OPR
 %token <val> LOGOPR
@@ -183,9 +159,8 @@ void printColorEnd(){
 %token WRITE
 %token IF
 
-%type <val> term list_iterator list_op log_opr opr
-%type <atrib> vector
-%type <node> factor command program statements statement write read def defn fnbody element expr
+%type <val> list_iterator list_op log_opr opr
+%type <node> term vector factor command program statements statement write read def defn fnbody element expr
 
 %%
 
@@ -194,6 +169,7 @@ program:
     {
         AST = NULL;
     }
+    
     | statements
     { 
         AST = $1;
@@ -204,6 +180,7 @@ program:
             printSymbolTable();
         }
     }
+
     | error
     {
         AST = NULL;
@@ -237,7 +214,7 @@ command:
     
     | ATOM factor factor
     {
-        $$ = createNode($1, $2, $3);
+        $$ = createNode($1->label, $2, $3);
     }
     
     | IF expr '?' '(' command ')' '(' command ')'
@@ -250,15 +227,15 @@ command:
         $$ = createNode("commandlist", $1, $3);
     }
     
-    | list_iterator ATOM { sym = (char*) strdup($2); } vector 
+    | list_iterator ATOM vector 
     { 
-        $$ = createNode($1, createLeaf(sym), $4->node);
-        checkArity(sym, 1);
+        $$ = createNode($1, createLeaf($2->label), $3);
+        checkArity($2->label, 1);
     }
     
     | list_op vector
     {
-        $$ = createNode($1, $2->node, NULL);
+        $$ = createNode($1, $2, NULL);
     }
     
     | NIL
@@ -316,9 +293,13 @@ read:
     ;
 
 defn:
-    DEFN ATOM { sym = (char*) strdup($2); } fnbody
+    DEFN ATOM
     { 
-        $$ = createNode("defn", createLeaf(sym), $4);
+        sym = (char*) strdup($2->label);
+    }
+    fnbody
+    { 
+        $$ = createNode("defn", createLeaf($2->label), $4);
     }
     ;
 
@@ -326,14 +307,14 @@ fnbody:
     '(' vector '(' command ')' ')' '(' fnbody ')'
     { 
         snprintf(anotation, 60, "aridade->%d", $2->params);
-        $$ = createNode("multfnbody", createAnotatedNode("fnbody", $2->node, $4, anotation), $8);
+        $$ = createNode("multfnbody", createAnotatedNode("fnbody", $2, $4, anotation), $8);
         addAtom(createFnAtom(sym, $2->params));
     }
     
     | vector '(' command ')'
     { 
         snprintf(anotation, 60, "aridade->%d", $1->params);
-        ($$) = (Tree*) createAnotatedNode("fnbody", $1->node, $3, anotation);
+        ($$) = (Tree*) createAnotatedNode("fnbody", $1, $3, anotation);
         addAtom(createFnAtom(sym, $1->params));
     }
     ;
@@ -341,20 +322,20 @@ fnbody:
 def:
     DEF ATOM factor
     {
-        $$ = createNode("def", createLeaf($2), $3);
+        $$ = createNode("def", createLeaf($2->label), $3);
     }
     
     | DEF ATOM vector
     {
-        $$ = createNode("def", createLeaf($2), $3->node); printf("ARIDADE: %d\n", $3->params);
+        $$ = createNode("def", createLeaf($2->label), $3); printf("ARIDADE: %d\n", $3->params);
     }
     ;
 
 vector:
     '[' element ']'
     {
-        $$->node = (Tree*) malloc(sizeof(Tree));
-        $$->node = (Tree*) $2;
+        $$ = (Tree*) malloc(sizeof(Tree));
+        $$ = (Tree*) $2;
         $$->params = arity; arity = 0;
     }
     ;
@@ -362,13 +343,13 @@ vector:
 element:
     term
     { 
-        $$ = createNode("element", createLeaf($1), NULL);
+        $$ = createNode("element", createLeaf($1->label), NULL);
         arity += 1;
     }
     
     | term element
     { 
-        $$ = createNode("element", createLeaf($1), $2);
+        $$ = createNode("element", createLeaf($1->label), $2);
         arity += 1;
     }
     ;
@@ -376,7 +357,7 @@ element:
 factor:
     term
     {
-        $$ = createLeaf($1);
+        $$ = createLeaf($1->label);
     }
     
     | '(' command ')'
@@ -447,19 +428,19 @@ log_opr:
 
 int main(int argc, char* argv[]) {
     if (argc == 1) {
-        printColorRed();
+        PRINT_COLOR(KRED);
         printf("No input file\n");
-        printColorEnd();
-        exit(-1);
+        PRINT_COLOR(KNRM);
+        return -1;
     }
 
-    if (argc == 2) {
-        yyin = fopen(argv[1], "r");
+    yyin = fopen(argv[1], "r");
 
-        if(yyin == NULL) {
-            printf("No such file or directory\n");
-            exit(0);
-        }
+    if(yyin == NULL) {
+        PRINT_COLOR(KRED);
+        printf("No such file or directory\n");
+        PRINT_COLOR(KNRM);
+        exit(0);
     }
 
     if (argc == 3) {
@@ -488,20 +469,20 @@ int main(int argc, char* argv[]) {
 
     if (!yyparse()) {
         if (!errorList) {
-            printColorGreen();
+            PRINT_COLOR(KGRN);
             printf("\nFile parsed correctly\n");
-            printColorEnd();
+            PRINT_COLOR(KNRM);
         } else {
             printf("\n\n");
-            printColorYellow();
+            PRINT_COLOR(KYEL);
             printErrors(&errorList);
-            printColorEnd();    
+            PRINT_COLOR(KNRM);    
         }
     } else {
         printf("\n\n");
-        printColorYellow();
+        PRINT_COLOR(KYEL);
         printErrors(&errorList);
-        printColorEnd();
+        PRINT_COLOR(KNRM);
     }
     fclose(yyin);
     return 0;
