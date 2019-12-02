@@ -6,9 +6,6 @@
 #include "interpreter.h"
 #include "util.h"
 
-#define TRUE 1
-#define FALSE 0
-
 #define YYDEBUG TRUE
 
 extern int yydebug;
@@ -25,7 +22,7 @@ typedef struct tree {
     Tree *left;
     Tree *right;
     int params;
-    Program *code;
+    Instruction *code;
     char attrs[100];
 } Tree;
 
@@ -33,9 +30,9 @@ typedef struct symbol {
     int id;
     char atom[60];
     union {
-        Program *subroutine;
         int value;
-        int *vector;
+        Program *subroutine;
+        Program *vector;
     } data;
     UT_hash_handle hh;
 } Symbol;
@@ -68,6 +65,7 @@ void printErrors(error **list);
 
 error *errorList = (error*)0;
 
+Instruction* genCode(Tree* node, Type type);
 Tree* createAnotatedNode(char* label, Tree* left, Tree* right, char* attrs);
 Tree* createNode(char* label, Tree* left, Tree* right);
 Tree* createLeaf(char* label);
@@ -336,7 +334,9 @@ vector:
     {
         $$ = (Tree*) malloc(sizeof(Tree));
         $$ = (Tree*) $2;
-        $$->params = arity; arity = 0;
+        $$->code = genCode($2, VECTOR_EXP);
+        $$->params = arity;
+        arity = 0;
     }
     ;
 
@@ -345,12 +345,16 @@ element:
     { 
         $$ = createNode("element", createLeaf($1->label), NULL);
         arity += 1;
+        // $$->code->exp.vector->cur_instruction = $1->code;
+        // $$->code->exp.vector->next_instruction = NULL;
     }
     
     | term element
     { 
         $$ = createNode("element", createLeaf($1->label), $2);
         arity += 1;
+        // $$->code->exp.vector->cur_instruction = $1->code;
+        // $$->code->exp.vector->next_instruction = NULL;
     }
     ;
 
@@ -358,6 +362,7 @@ factor:
     term
     {
         $$ = createLeaf($1->label);
+        $$->code = $1->code;
     }
     
     | '(' command ')'
@@ -369,12 +374,18 @@ factor:
 term:
     ATOM
     {
+        $1->code = genCode($1, ATOM_EXP);
         $$ = $1;
+        $1 = NULL;
+        free($1);
     }
     
     | NUM
     {
+        $1->code = genCode($1, INT_EXP);
         $$ = $1;
+        $1 = NULL;
+        free($1);
     }
     ;
 
@@ -484,12 +495,13 @@ int main(int argc, char* argv[]) {
         printErrors(&errorList);
         PRINT_COLOR(KNRM);
     }
+
     fclose(yyin);
+    
     return 0;
 }
 
-int yyerror (char *s)
-{
+int yyerror (char *s) {
     char errorMessage[400];
     snprintf(errorMessage, 400, "\n%s at line { %d }, column { %d }\n", s, lines, characters);
     pushError(&errorList, errorMessage);
@@ -534,6 +546,127 @@ Tree* createAnotatedNode(char* label, Tree* left, Tree* right, char* attrs) {
 
 Tree* createLeaf(char* label) {
     return createNode(label, NULL, NULL);
+}
+
+Instruction* genCode(Tree* node, Type type) {
+    Instruction *code = (Instruction*) malloc(sizeof(Instruction));
+
+    switch (type)
+    {
+        case NIL_EXP:
+            code->type = type;
+            return NULL;
+        
+        case INT_EXP:
+            code->type = type;
+            code->exp.int_value = atoi(node->label);
+            return code; 
+
+        case VECTOR_EXP:
+            code->type = type;
+            return NULL;
+        
+        case ATOM_EXP:
+            code->type = type;
+            code->exp.atom = (char*) strdup(node->label);
+            return code; 
+        
+        case INVOKE_EXP:
+            code->type = type;
+            return NULL;
+        
+        case ADD_EXP:
+            code->type = type;
+            return NULL;
+        
+        case SUB_EXP:
+            code->type = type;
+            return NULL;
+        
+        case MUL_EXP:
+            code->type = type;
+            return NULL;
+        
+        case DIV_EXP:
+            code->type = type;
+            return NULL;
+        
+        case AND_EXP:
+            code->type = type;
+            return NULL;
+        
+        case OR_EXP:
+            code->type = type;
+            return NULL;
+        
+        case NOT_EXP:
+            code->type = type;
+            return NULL;
+        
+        case GT_EXP:
+            code->type = type;
+            return NULL;
+        
+        case LT_EXP:
+            code->type = type;
+            return NULL;
+        
+        case GOEQ_EXP:
+            code->type = type;
+            return NULL;
+        
+        case LOEQ_EXP:
+            code->type = type;
+            return NULL;
+        
+        case EQ_EXP:
+            code->type = type;
+            return NULL;
+        
+        case NEQ_EXP:
+            code->type = type;
+            return NULL;
+        
+        case HEAD_EXP:
+            code->type = type;
+            return NULL;
+        
+        case TAIL_EXP:
+            code->type = type;
+            return NULL;
+        
+        case CONS_EXP:
+            code->type = type;
+            return NULL;
+        
+        case COUNT_EXP:
+            code->type = type;
+            return NULL;
+        
+        case MAP_EXP:
+            code->type = type;
+            return NULL;
+        
+        case FILTER_EXP:
+            code->type = type;
+            return NULL;
+
+        case IF_EXP:
+            code->type = type;
+            return NULL;
+        
+        case WRITE_EXP:
+            code->type = type;
+            return NULL;
+        
+        case READ_EXP:
+            code->type = type;
+            return NULL;  
+        
+        default:
+            code->type = type;
+            return NULL;
+    }
 }
 
 void printTree(Tree* tree, int space) {
