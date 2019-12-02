@@ -10,3 +10,8 @@
 #define KWHT  "\x1B[37m"
 
 #define PRINT_COLOR(color) do { printf("%s", (color)); } while (0)
+
+typedef enum Bool {
+    FALSE,
+    TRUE
+} Bool;
