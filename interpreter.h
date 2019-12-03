@@ -1,3 +1,4 @@
+#include "util.h"
 #include "uthash.h"
 
 typedef struct Program Program;
@@ -29,8 +30,8 @@ typedef struct Write Write;
 typedef struct Read Read;
 
 struct Invoke {
-    char atom[60];
-    Instruction *instruction;
+    Instruction *atom;
+    Instruction *params;
 };
 
 typedef struct Add {
@@ -170,7 +171,7 @@ typedef enum Type {
 struct Instruction {
     Type type;
     union Expression {
-        int             nil;
+        Bool            nil;
         int             int_value;
         Program         *vector;
         char            *atom;
@@ -194,8 +195,8 @@ struct Instruction {
         Count           *count;
         Map             *map;
         Filter          *filter;
-        IfStmt          ifstmt;
-        Write           *print;
+        IfStmt          *ifstmt;
+        Write           *write;
         Read            *read;
     } exp;
 };

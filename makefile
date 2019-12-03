@@ -14,10 +14,10 @@ flex:
 	flex parser.l
 
 misp-prd:
-	gcc syntax.tab.c lex.yy.c -o misp
+	gcc syntax.tab.c lex.yy.c interpreter.c -o misp
 
 misp-dev:
-	gcc -Wall -W syntax.tab.c lex.yy.c -o misp
+	gcc -Wall -W syntax.tab.c lex.yy.c interpreter.c -o misp
 
 test-all-dev:
 	./misp correto.misp --lex --syntax

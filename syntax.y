@@ -22,7 +22,7 @@ typedef struct tree {
     Tree *left;
     Tree *right;
     int params;
-    Instruction *code;
+    Program *code;
     char attrs[100];
 } Tree;
 
@@ -65,7 +65,7 @@ void printErrors(error **list);
 
 error *errorList = (error*)0;
 
-Instruction* genCode(Tree* node, Type type);
+Program* genCode(Tree* node, Type type, Instruction *lhs, Instruction *rhs);
 Tree* createAnotatedNode(char* label, Tree* left, Tree* right, char* attrs);
 Tree* createNode(char* label, Tree* left, Tree* right);
 Tree* createLeaf(char* label);
@@ -158,7 +158,7 @@ void printSymbolTable() {
 %token IF
 
 %type <val> list_iterator list_op log_opr opr
-%type <node> term vector factor command program statements statement write read def defn fnbody element expr
+%type <node> term vector factor compound_factor command program statements statement write read def defn fnbody element expr
 
 %%
 
@@ -177,6 +177,9 @@ program:
             printTree(AST, 0);
             printSymbolTable();
         }
+        program = (Program*) malloc(sizeof(Program));
+        program = $1->code;
+        run(program, NULL);
     }
 
     | error
@@ -190,9 +193,13 @@ statements:
     {
         $$ = $1;
     }
+
     | statement statements
     {
         $$ = createNode("statements", $1, $2);
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code = $1->code;
+        $$->code->next_instruction = $2->code;
     }
     ;
 
@@ -200,45 +207,106 @@ statement:
         '('  command ')'   { $$ = $2; }
     |   '('  write   ')'   { $$ = $2; }
     |   '('  read    ')'   { $$ = $2; }
-    |   '('  def     ')'   { $$ = $2; }
-    |   '('  defn    ')'   { $$ = $2; }
+    |   '('  def     ')'   { $$ = $2; $$->code = genCode($$, NIL_EXP, NULL, NULL); }
+    |   '('  defn    ')'   { $$ = $2; $$->code = genCode($$, NIL_EXP, NULL, NULL); }
     ;
 
 command:
     opr factor factor
     {
-        $$ = createNode((char*) strdup($1), $2, $3);
+        char* opr = (char*) strdup($1);
+        $$ = createNode(opr, $2, $3);
+
+        if (!strcmp(opr, "(+)")) {
+
+            $$->code = genCode($$, ADD_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
+
+        } else if (!strcmp(opr, "(-)")) {
+
+            $$->code = genCode($$, SUB_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
+        
+        } else if (!strcmp(opr, "(*)")) {
+
+            $$->code = genCode($$, MUL_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
+
+        } else if (!strcmp(opr, "(/)")) {
+
+            $$->code = genCode($$, DIV_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
+
+        }
     }
     
-    | ATOM factor factor
+    | ATOM '(' compound_factor ')'
     {
-        $$ = createNode($1->label, $2, $3);
+        $$ = createNode($1->label, $3, NULL);
+
+        $1->code = genCode($1, ATOM_EXP, NULL, NULL);
+
+        $$->code = genCode($$, INVOKE_EXP, $1->code->cur_instruction, $3->code->cur_instruction);
     }
     
     | IF expr '?' '(' command ')' '(' command ')'
     { 
         $$ = createNode("if", $2, createNode("then", $5, createNode("else", $8, NULL)));
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code = genCode($2, IF_EXP, $5->code->cur_instruction, $8->code->cur_instruction);
     }
     
     | command '(' command ')'
     { 
         $$ = createNode("commandlist", $1, $3);
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code = $1->code;
+        $$->code->next_instruction = $3->code;
     }
     
     | list_iterator ATOM vector 
     { 
         $$ = createNode($1, createLeaf($2->label), $3);
+
         checkArity($2->label, 1);
+
+        $2->code = genCode($2, ATOM_EXP, NULL, NULL);
+
+        if (!strcmp($1, "map")) {
+
+            $$->code = genCode($$, MAP_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
+
+        } else if (!strcmp($1, "filter")) {
+
+            $$->code = genCode($$, FILTER_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
+
+        }
     }
     
     | list_op vector
     {
         $$ = createNode($1, $2, NULL);
+        
+
+        if (!strcmp($1, "head")) {
+
+            $$->code = genCode($$, HEAD_EXP, $2->code->cur_instruction, NULL);
+
+        } else if (!strcmp($1, "tail")) {
+
+            $$->code = genCode($$, TAIL_EXP, $2->code->cur_instruction, NULL);
+
+        } else if (!strcmp($1, "cons")) {
+
+            $$->code = genCode($$, CONS_EXP, $2->code->cur_instruction, NULL);
+
+        } else if (!strcmp($1, "count")) {
+
+            $$->code = genCode($$, COUNT_EXP, $2->code->cur_instruction, NULL);
+
+        }
     }
     
     | NIL
     {
         $$ = createLeaf("nil");
+        $$->code = genCode($$, NIL_EXP, NULL, NULL);
     }
     ;
 
@@ -334,7 +402,7 @@ vector:
     {
         $$ = (Tree*) malloc(sizeof(Tree));
         $$ = (Tree*) $2;
-        $$->code = genCode($2, VECTOR_EXP);
+        $$->code = genCode($2, VECTOR_EXP, NULL, NULL);
         $$->params = arity;
         arity = 0;
     }
@@ -345,16 +413,36 @@ element:
     { 
         $$ = createNode("element", createLeaf($1->label), NULL);
         arity += 1;
-        // $$->code->exp.vector->cur_instruction = $1->code;
-        // $$->code->exp.vector->next_instruction = NULL;
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code->cur_instruction = (Instruction*) malloc(sizeof(Instruction));
+        $$->code->cur_instruction->exp.vector = (Program*) malloc(sizeof(Program));
+        $$->code->cur_instruction->exp.vector->cur_instruction = $1->code->cur_instruction;
+        $$->code->cur_instruction->exp.vector->next_instruction = NULL;
     }
     
     | term element
     { 
         $$ = createNode("element", createLeaf($1->label), $2);
         arity += 1;
-        // $$->code->exp.vector->cur_instruction = $1->code;
-        // $$->code->exp.vector->next_instruction = NULL;
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code->cur_instruction = (Instruction*) malloc(sizeof(Instruction));
+        $$->code->cur_instruction->exp.vector = (Program*) malloc(sizeof(Program));
+        $$->code->cur_instruction->exp.vector->cur_instruction = $1->code->cur_instruction;
+        $$->code->cur_instruction->exp.vector->next_instruction = $2->code;
+    }
+    ;
+
+compound_factor:
+    factor
+    {
+        $$ = createLeaf($1->label);
+    }
+
+    | factor ',' compound_factor
+    {
+        $$ = createNode("factor", createLeaf($1->label), $3);
+        $$->code = $1->code;
+        $$->code->next_instruction = $3->code;
     }
     ;
 
@@ -364,17 +452,18 @@ factor:
         $$ = createLeaf($1->label);
         $$->code = $1->code;
     }
-    
+
     | '(' command ')'
     {
         $$ = $2;
+        $$->code = $2->code;
     }
     ;
 
 term:
     ATOM
     {
-        $1->code = genCode($1, ATOM_EXP);
+        $1->code = genCode($1, ATOM_EXP, NULL, NULL);
         $$ = $1;
         $1 = NULL;
         free($1);
@@ -382,7 +471,7 @@ term:
     
     | NUM
     {
-        $1->code = genCode($1, INT_EXP);
+        $1->code = genCode($1, INT_EXP, NULL, NULL);
         $$ = $1;
         $1 = NULL;
         free($1);
@@ -393,11 +482,39 @@ expr:
     '(' log_opr factor factor ')'
     {
         $$ = createNode($2, $3, $4);
+
+        if(!strcmp($2, "<=")) {
+
+            $$->code = genCode($$, LOEQ_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+
+        } else if(!strcmp($2, ">=")) {
+
+            $$->code = genCode($$, GOEQ_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+        
+        } else if(!strcmp($2, ">")) {
+
+            $$->code = genCode($$, GT_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+
+        } else if(!strcmp($2, "<")) {
+
+            $$->code = genCode($$, LT_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+
+        } else if(!strcmp($2, "=")) {
+
+            $$->code = genCode($$, EQ_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+
+        } else if(!strcmp($2, "!=")) {
+
+            $$->code = genCode($$, NEQ_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+        
+        }
+        
     }
     
     | '(' NOT expr ')'
     {
         $$ = createNode("not", $3, NULL);
+        $$->code = genCode($$, NOT_EXP, $3->code->cur_instruction, NULL);
     }
     ;
 
@@ -548,123 +665,204 @@ Tree* createLeaf(char* label) {
     return createNode(label, NULL, NULL);
 }
 
-Instruction* genCode(Tree* node, Type type) {
-    Instruction *code = (Instruction*) malloc(sizeof(Instruction));
+Program* genCode(Tree* node, Type type, Instruction *lhs, Instruction *rhs) {
+    Program *code = (Program*) malloc(sizeof(Program));
+    code->cur_instruction = (Instruction*) malloc(sizeof(Instruction));
+    code->cur_instruction->type = type;
+    code->next_instruction = NULL;
 
     switch (type)
     {
         case NIL_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.nil = TRUE;
+            return code;
         
         case INT_EXP:
-            code->type = type;
-            code->exp.int_value = atoi(node->label);
+            code->cur_instruction->exp.int_value = atoi(node->label);
             return code; 
 
         case VECTOR_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.vector = (Program*) malloc(sizeof(Program));
+            code->cur_instruction->exp.vector = node->code;
+            return code;
         
         case ATOM_EXP:
-            code->type = type;
-            code->exp.atom = (char*) strdup(node->label);
-            return code; 
+            code->cur_instruction->exp.atom = (char*) strdup(node->label);
+            return code;
         
         case INVOKE_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.invoke = (Invoke*) malloc(sizeof(Invoke));
+            code->cur_instruction->exp.invoke->atom = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.invoke->atom = lhs;
+            code->cur_instruction->exp.invoke->params = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.invoke->params = rhs;
+            return code;
         
         case ADD_EXP:
-            code->type = type;
-            return NULL;
+            // code->cur_instruction->exp.add = (Add*) malloc(sizeof(Add));
+            // code->cur_instruction->exp.add->lhs = (Instruction*) malloc(sizeof(Instruction));
+            // code->cur_instruction->exp.add->lhs = lhs;
+            // code->cur_instruction->exp.add->rhs = (Instruction*) malloc(sizeof(Instruction));
+            // code->cur_instruction->exp.add->rhs = rhs;
+            return code;
         
         case SUB_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.sub = (Sub*) malloc(sizeof(Sub));
+            code->cur_instruction->exp.sub->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.sub->lhs = lhs;
+            code->cur_instruction->exp.sub->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.sub->rhs = rhs;
+            return code;
         
         case MUL_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.mul = (Mul*) malloc(sizeof(Mul));
+            code->cur_instruction->exp.mul->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.mul->lhs = lhs;
+            code->cur_instruction->exp.mul->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.mul->rhs = rhs;
+            return code;
         
         case DIV_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.div = (Div*) malloc(sizeof(Div));
+            code->cur_instruction->exp.div->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.div->lhs = lhs;
+            code->cur_instruction->exp.div->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.div->rhs = rhs;
+            return code;
         
         case AND_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.and = (And*) malloc(sizeof(And));
+            code->cur_instruction->exp.and->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.and->lhs = lhs;
+            code->cur_instruction->exp.and->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.and->rhs = rhs;
+            return code;
         
         case OR_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.or = (Or*) malloc(sizeof(Or));
+            code->cur_instruction->exp.or->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.or->lhs = lhs;
+            code->cur_instruction->exp.or->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.or->rhs = rhs;
+            return code;
         
         case NOT_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.not = (Not*) malloc(sizeof(Not));
+            code->cur_instruction->exp.not->instruction = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.not->instruction = lhs;
+            return code;
         
         case GT_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.gt = (Gt*) malloc(sizeof(Gt));
+            code->cur_instruction->exp.gt->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.gt->lhs = lhs;
+            code->cur_instruction->exp.gt->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.gt->rhs = rhs;
+            return code;
         
         case LT_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.lt = (Lt*) malloc(sizeof(Lt));
+            code->cur_instruction->exp.lt->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.lt->lhs = lhs;
+            code->cur_instruction->exp.lt->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.lt->rhs = rhs;
+            return code;
         
         case GOEQ_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.goeq = (Goeq*) malloc(sizeof(Goeq));
+            code->cur_instruction->exp.goeq->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.goeq->lhs = lhs;
+            code->cur_instruction->exp.goeq->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.goeq->rhs = rhs;
+            return code;
         
         case LOEQ_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.loeq = (Loeq*) malloc(sizeof(Loeq));
+            code->cur_instruction->exp.loeq->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.loeq->lhs = lhs;
+            code->cur_instruction->exp.loeq->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.loeq->rhs = rhs;
+            return code;
         
         case EQ_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.eq = (Eq*) malloc(sizeof(Eq));
+            code->cur_instruction->exp.eq->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.eq->lhs = lhs;
+            code->cur_instruction->exp.eq->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.eq->rhs = rhs;
+            return code;
         
         case NEQ_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.neq = (Neq*) malloc(sizeof(Neq));
+            code->cur_instruction->exp.neq->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.neq->lhs = lhs;
+            code->cur_instruction->exp.neq->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.neq->rhs = rhs;
+            return code;
         
         case HEAD_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.head = (Head*) malloc(sizeof(Head));
+            code->cur_instruction->exp.head->vector = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.head->vector = lhs;
+            return code;
         
         case TAIL_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.tail = (Tail*) malloc(sizeof(Tail));
+            code->cur_instruction->exp.tail->vector = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.tail->vector = lhs;
+            return code;
         
         case CONS_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.cons = (Cons*) malloc(sizeof(Cons));
+            code->cur_instruction->exp.cons->vector = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.cons->vector = lhs;
+            return code;
         
         case COUNT_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.count = (Count*) malloc(sizeof(Count));
+            code->cur_instruction->exp.count->vector = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.count->vector = lhs;
+            return code;
         
         case MAP_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.map = (Map*) malloc(sizeof(Map));
+            code->cur_instruction->exp.map->atom = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.map->atom = lhs;
+            code->cur_instruction->exp.map->vector = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.map->vector = rhs;
+            return code;
         
         case FILTER_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.filter = (Filter*) malloc(sizeof(Filter));
+            code->cur_instruction->exp.filter->atom = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.filter->atom = lhs;
+            code->cur_instruction->exp.filter->vector = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.filter->vector = rhs;
+            return code;
 
         case IF_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.ifstmt = (IfStmt*) malloc(sizeof(IfStmt));
+            code->cur_instruction->exp.ifstmt->cond = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.ifstmt->cond = node->code->cur_instruction;
+            code->cur_instruction->exp.ifstmt->ifStmt = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.ifstmt->ifStmt = lhs;
+            code->cur_instruction->exp.ifstmt->elseStmt = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.ifstmt->elseStmt = rhs;
+            return code;
         
         case WRITE_EXP:
-            code->type = type;
-            return NULL;
+            code->cur_instruction->exp.write = (Write*) malloc(sizeof(Write));
+            code->cur_instruction->exp.write->instruction = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.write->instruction = lhs;
+            return code;
         
         case READ_EXP:
-            code->type = type;
-            return NULL;  
+            code->cur_instruction->exp.read = (Read*) malloc(sizeof(Read));
+            code->cur_instruction->exp.read->instruction = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.read->instruction = lhs;
+            return code;  
         
         default:
-            code->type = type;
             return NULL;
     }
 }

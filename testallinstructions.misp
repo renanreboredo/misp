@@ -1,0 +1,17 @@
+(defn sum
+([x] (/ x 2))
+([x y] (+ x y))
+)
+
+(defn sum [x y z] (+ x (sum (y, z))))
+
+(map sum [1 x 3 4 5])
+(nil)
+(filter sum [1 x 3 4 5])
+
+(head [1 x 3 4 5])
+(tail [1 x 3 4 5])
+(cons [1 x 3 4 5])
+(count [1 x 3 4 5])
+
+(if (!= 1 2) ? (map sum [1 x 3 4 5]) (filter sum [1 x 3 4 5]))

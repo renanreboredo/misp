@@ -5,9 +5,6 @@
   #include "syntax.tab.h"
   #include "interpreter.h"
   
-  #define TRUE 1
-  #define FALSE 0
-  
   #define KNRM  "\x1B[0m"
   #define KRED  "\x1B[31m"
   #define KGRN  "\x1B[32m"
@@ -61,6 +58,7 @@
 ")"                           characters += characterCount(yytext);     printToken(")");                                                                        return yytext[0];
 "["                           characters += characterCount(yytext);     printToken("[");                                                                        return yytext[0];
 "]"                           characters += characterCount(yytext);     printToken("]");                                                                        return yytext[0];
+","                           characters += characterCount(yytext);     printToken(",");                                                                        return yytext[0];
 "defn"                        characters += characterCount(yytext);     printToken("DEFN");                                                                     return DEFN;
 "def"                         characters += characterCount(yytext);     printToken("DEF");                                                                      return DEF;
 "cons"                        characters += characterCount(yytext);     printToken("CONS");                                                                     return CONS;

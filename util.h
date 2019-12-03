@@ -11,7 +11,7 @@
 
 #define PRINT_COLOR(color) do { printf("%s", (color)); } while (0)
 
-typedef enum Bool {
-    FALSE,
-    TRUE
-} Bool;
+#define TRUE 1
+#define FALSE 0
+
+typedef int Bool;
