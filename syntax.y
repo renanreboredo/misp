@@ -14,28 +14,17 @@ int yyerror (char *s);
 int yylex ();
 
 typedef struct tree Tree;
-typedef struct symbol Symbol;
 typedef struct error Error;
 
 typedef struct tree {
     char label[100];
     Tree *left;
     Tree *right;
-    int params;
+    int arity;
     Program *code;
+    Program *params;
     char attrs[100];
 } Tree;
-
-typedef struct symbol {
-    int id;
-    char atom[60];
-    union {
-        int value;
-        Program *subroutine;
-        Program *vector;
-    } data;
-    UT_hash_handle hh;
-} Symbol;
 
 typedef struct error {
     char errorMsg[400];
@@ -50,12 +39,9 @@ char anotation[60];
 error *errors= (error*)0;
 int lex = FALSE;
 int syntax = FALSE;
-int hasSymbols = FALSE;
 struct tree *aux = (Tree*)0;
 
 Tree* AST = NULL;
-Symbol* symbolTable = NULL;
-int symbolID = 0;
 
 void throwError(char* tkn);
 
@@ -71,39 +57,12 @@ Tree* createNode(char* label, Tree* left, Tree* right);
 Tree* createLeaf(char* label);
 void printNode(Tree* node);
 void printTree(Tree* tree, int space);
-void checkArity(char* symbol, int arity);
+void checkArity(char* Function, int arity);
 
-char* createFnAtom(char* s, int a) {
-    char* str = (char*) malloc(sizeof(char)*60);
-    snprintf(str, 60, "%s/%d", s, a);
-    return str;
-} 
-
-Symbol* findAtom(char* atom) {
-    Symbol* s = (Symbol*) malloc(sizeof(Symbol));
-    HASH_FIND_STR(symbolTable, atom, s);
-    if(s != NULL) return s;
-    return NULL;
-}
-
-void addAtom(char* atom) {
+void checkArity(char* Function, int arity) {
     char errorMessage[400];
-    if(findAtom(atom) == NULL) {
-        Symbol* s = (Symbol*) malloc(sizeof(Symbol));
-        strcpy(s->atom, atom);
-        s->id = symbolID++;
-        HASH_ADD_STR(symbolTable, atom, s);
-        if(!hasSymbols) { hasSymbols = TRUE; }
-    } else {
-        snprintf(errorMessage, 400, "\nFunction already declared");
-        yyerror(errorMessage);
-    }
-}
-
-void checkArity(char* symbol, int arity) {
-    char errorMessage[400];
-    if(findAtom(createFnAtom(symbol, arity)) == NULL) {
-        snprintf(errorMessage, 400, "\n%s with arity %d not declared previously", symbol, arity);
+    if(findAtom(createFnAtomLabel(Function, arity)) == NULL) {
+        snprintf(errorMessage, 400, "\n%s with arity %d not declared previously", Function, arity);
         yyerror(errorMessage);
     }
 }
@@ -115,11 +74,11 @@ void printDelimiter() {
 
 void printSymbolTable() {
     if (hasSymbols) {
-        Symbol *tmp = NULL;
-        Symbol* s = (Symbol*) malloc(sizeof(Symbol));
+        Function *tmp = NULL;
+        Function* s = (Function*) malloc(sizeof(Function));
         
         printDelimiter();
-        printf("SYMBOL TABLE: \n\n");
+        printf("Function TABLE: \n\n");
 
         printf("|\tid\t|\tatom\t|\n\n");
 
@@ -158,7 +117,7 @@ void printSymbolTable() {
 %token IF
 
 %type <val> list_iterator list_op log_opr opr
-%type <node> term vector factor compound_factor command program statements statement write read def defn fnbody element expr
+%type <node> term atom_element atom_vector vector factor compound_factor command program statements statement write read def defn fnbody element expr
 
 %%
 
@@ -179,7 +138,6 @@ program:
         }
         program = (Program*) malloc(sizeof(Program));
         program = $1->code;
-        run(program, NULL);
     }
 
     | error
@@ -205,8 +163,6 @@ statements:
 
 statement:
         '('  command ')'   { $$ = $2; }
-    |   '('  write   ')'   { $$ = $2; }
-    |   '('  read    ')'   { $$ = $2; }
     |   '('  def     ')'   { $$ = $2; $$->code = genCode($$, NIL_EXP, NULL, NULL); }
     |   '('  defn    ')'   { $$ = $2; $$->code = genCode($$, NIL_EXP, NULL, NULL); }
     ;
@@ -235,21 +191,51 @@ command:
 
         }
     }
+
+    | write 
+    {
+        $$ = $1;
+    }
+
+    | read
+    {
+        $$ = $1;
+    }
     
     | ATOM '(' compound_factor ')'
     {
         $$ = createNode($1->label, $3, NULL);
 
         $1->code = genCode($1, ATOM_EXP, NULL, NULL);
+        $$->code = (Program*) malloc(sizeof(Program));
+        if($3 != NULL) {
+            $$->code = $3->code;
+        }
+        $$->code = genCode($$, INVOKE_EXP, $1->code->cur_instruction, NULL);
+    }
 
-        $$->code = genCode($$, INVOKE_EXP, $1->code->cur_instruction, $3->code->cur_instruction);
+    | ATOM '(' ')'
+    {
+        $$ = createNode($1->label, NULL, NULL);
+
+        $1->code = genCode($1, ATOM_EXP, NULL, NULL);
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code = genCode($$, INVOKE_EXP, $1->code->cur_instruction, NULL);
+    }
+
+    | expr
+    {
+        $$ = createLeaf($1->label);
+
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code = $1->code;
     }
     
-    | IF expr '?' '(' command ')' '(' command ')'
+    | IF '(' expr ')' '?' '(' command ')' '(' command ')'
     { 
-        $$ = createNode("if", $2, createNode("then", $5, createNode("else", $8, NULL)));
+        $$ = createNode("if", $3, createNode("then", $7, createNode("else", $10, NULL)));
         $$->code = (Program*) malloc(sizeof(Program));
-        $$->code = genCode($2, IF_EXP, $5->code->cur_instruction, $8->code->cur_instruction);
+        $$->code = genCode($3, IF_EXP, $7->code->cur_instruction, $10->code->cur_instruction);
     }
     
     | command '(' command ')'
@@ -348,6 +334,7 @@ write:
     WRITE '(' command ')'
     {
         $$ = createNode("write", $3, NULL);
+        $$->code = genCode($$, WRITE_EXP, $3->code->cur_instruction, NULL);
     }
     ;
 
@@ -370,18 +357,25 @@ defn:
     ;
 
 fnbody:
-    '(' vector '(' command ')' ')' '(' fnbody ')'
+    '(' atom_vector '(' command ')' ')' '(' fnbody ')'
     { 
-        snprintf(anotation, 60, "aridade->%d", $2->params);
+        snprintf(anotation, 60, "aridade->%d", $2->arity);
         $$ = createNode("multfnbody", createAnotatedNode("fnbody", $2, $4, anotation), $8);
-        addAtom(createFnAtom(sym, $2->params));
+        addAtom(createFnAtomLabel(sym, $2->arity), $4->code, $2->code);
     }
     
-    | vector '(' command ')'
+    | atom_vector '(' command ')'
     { 
-        snprintf(anotation, 60, "aridade->%d", $1->params);
+        snprintf(anotation, 60, "aridade->%d", $1->arity);
         ($$) = (Tree*) createAnotatedNode("fnbody", $1, $3, anotation);
-        addAtom(createFnAtom(sym, $1->params));
+        addAtom(createFnAtomLabel(sym, $1->arity), $3->code, $1->code);
+    }
+    // Remover regra - Conflito de Shift Reduce
+    | '[' ']' '(' command ')'
+    { 
+        snprintf(anotation, 60, "aridade->%d", 0);
+        ($$) = (Tree*) createAnotatedNode("fnbody", NULL, $4, anotation);
+        addAtom(createFnAtomLabel(sym, 0), $4->code, NULL);
     }
     ;
 
@@ -393,7 +387,7 @@ def:
     
     | DEF ATOM vector
     {
-        $$ = createNode("def", createLeaf($2->label), $3); printf("ARIDADE: %d\n", $3->params);
+        $$ = createNode("def", createLeaf($2->label), $3); printf("ARIDADE: %d\n", $3->arity);
     }
     ;
 
@@ -403,8 +397,51 @@ vector:
         $$ = (Tree*) malloc(sizeof(Tree));
         $$ = (Tree*) $2;
         $$->code = genCode($2, VECTOR_EXP, NULL, NULL);
-        $$->params = arity;
+        $$->arity = arity;
         arity = 0;
+    }
+    ;
+
+atom_vector:
+    '[' atom_element ']'
+    {
+        $$ = (Tree*) malloc(sizeof(Tree));
+        $$ = (Tree*) $2;
+        $$->code = $2->code;
+        $$->arity = arity;
+        arity = 0;
+    }
+    
+    |
+    '[' ']'
+    {
+        $$ = (Tree*) malloc(sizeof(Tree));
+        $$->arity = 0;
+        $$->code = NULL;
+    }
+    ;
+
+atom_element:
+    ATOM
+    { 
+        $$ = createNode("element", createLeaf($1->label), NULL);
+        arity += 1;
+        $1->code = genCode($1, ATOM_EXP, NULL, NULL);
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code->cur_instruction = (Instruction*) malloc(sizeof(Instruction));
+        $$->code->cur_instruction = $1->code->cur_instruction;
+        $$->code->next_instruction = NULL;
+    }
+    
+    | ATOM atom_element
+    { 
+        $$ = createNode("element", createLeaf($1->label), $2);
+        arity += 1;
+        $1->code = genCode($1, ATOM_EXP, NULL, NULL);
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code->cur_instruction = (Instruction*) malloc(sizeof(Instruction));
+        $$->code->cur_instruction = $1->code->cur_instruction;
+        $$->code->next_instruction = $2->code;
     }
     ;
 
@@ -436,13 +473,16 @@ compound_factor:
     factor
     {
         $$ = createLeaf($1->label);
+        $$->code = (Program*) malloc(sizeof(Program));
+        $$->code = $1->code;
+        $$->code->next_instruction = NULL;
     }
 
-    | factor ',' compound_factor
+    | factor compound_factor
     {
-        $$ = createNode("factor", createLeaf($1->label), $3);
+        $$ = createNode("factor", createLeaf($1->label), $2);
         $$->code = $1->code;
-        $$->code->next_instruction = $3->code;
+        $$->code->next_instruction = $2->code;
     }
     ;
 
@@ -479,39 +519,39 @@ term:
     ;
 
 expr:
-    '(' log_opr factor factor ')'
+    log_opr factor factor
     {
-        $$ = createNode($2, $3, $4);
+        $$ = createNode($1, $2, $3);
 
-        if(!strcmp($2, "<=")) {
+        if(!strcmp($1, "<=")) {
 
-            $$->code = genCode($$, LOEQ_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+            $$->code = genCode($$, LOEQ_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
 
-        } else if(!strcmp($2, ">=")) {
+        } else if(!strcmp($1, ">=")) {
 
-            $$->code = genCode($$, GOEQ_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+            $$->code = genCode($$, GOEQ_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
         
-        } else if(!strcmp($2, ">")) {
+        } else if(!strcmp($1, ">")) {
 
-            $$->code = genCode($$, GT_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+            $$->code = genCode($$, GT_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
 
-        } else if(!strcmp($2, "<")) {
+        } else if(!strcmp($1, "<")) {
 
-            $$->code = genCode($$, LT_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+            $$->code = genCode($$, LT_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
 
-        } else if(!strcmp($2, "=")) {
+        } else if(!strcmp($1, "=")) {
 
-            $$->code = genCode($$, EQ_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+            $$->code = genCode($$, EQ_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
 
-        } else if(!strcmp($2, "!=")) {
+        } else if(!strcmp($1, "!=")) {
 
-            $$->code = genCode($$, NEQ_EXP, $3->code->cur_instruction, $4->code->cur_instruction);
+            $$->code = genCode($$, NEQ_EXP, $2->code->cur_instruction, $3->code->cur_instruction);
         
         }
         
     }
     
-    | '(' NOT expr ')'
+    | NOT '(' expr ')'
     {
         $$ = createNode("not", $3, NULL);
         $$->code = genCode($$, NOT_EXP, $3->code->cur_instruction, NULL);
@@ -555,6 +595,9 @@ log_opr:
 %%
 
 int main(int argc, char* argv[]) {
+    symbolID = 0;
+    hasSymbols = FALSE;
+    
     if (argc == 1) {
         PRINT_COLOR(KRED);
         printf("No input file\n");
@@ -595,11 +638,42 @@ int main(int argc, char* argv[]) {
         }
     } 
 
+    if (argc == 5) {
+        if(!strcmp(argv[2], "--lex")){
+            lex = TRUE;
+            printf("TOKENS: \n\n");
+        } else if(!strcmp(argv[2], "--syntax")) {
+            syntax = TRUE;
+        } else if(!strcmp(argv[2], "--trace")) {
+            trace = TRUE;
+        }
+
+        if(!strcmp(argv[3], "--syntax")){
+            syntax = TRUE;
+        } else if(!strcmp(argv[3], "--lex") && syntax) {
+            lex = TRUE;
+            printf("TOKENS: \n\n");
+        } else if(!strcmp(argv[3], "--trace")) {
+            trace = TRUE;
+        }
+
+        if(!strcmp(argv[4], "--syntax")){
+            syntax = TRUE;
+        } else if(!strcmp(argv[4], "--lex") && syntax) {
+            lex = TRUE;
+            printf("TOKENS: \n\n");
+        } else if(!strcmp(argv[4], "--trace")) {
+            trace = TRUE;
+        }
+    } 
+
     if (!yyparse()) {
         if (!errorList) {
-            PRINT_COLOR(KGRN);
-            printf("\nFile parsed correctly\n");
-            PRINT_COLOR(KNRM);
+            if (lex || syntax) {
+                PRINT_COLOR(KGRN);
+                printf("\nFile parsed correctly\n");
+                PRINT_COLOR(KNRM);
+            }
         } else {
             printf("\n\n");
             PRINT_COLOR(KYEL);
@@ -614,6 +688,16 @@ int main(int argc, char* argv[]) {
     }
 
     fclose(yyin);
+
+    Context *context = (Context*) malloc(sizeof(Context));
+    context->stack = NULL;
+
+    if (!errorList) {
+        run(program, context);
+        PRINT_COLOR(KGRN);
+        printf("PROGRAM COMPLETED!\n");
+        PRINT_COLOR(KNRM);
+    }
     
     return 0;
 }
@@ -687,23 +771,23 @@ Program* genCode(Tree* node, Type type, Instruction *lhs, Instruction *rhs) {
             return code;
         
         case ATOM_EXP:
-            code->cur_instruction->exp.atom = (char*) strdup(node->label);
+            strcpy(code->cur_instruction->exp.atom, node->label);
             return code;
         
         case INVOKE_EXP:
             code->cur_instruction->exp.invoke = (Invoke*) malloc(sizeof(Invoke));
             code->cur_instruction->exp.invoke->atom = (Instruction*) malloc(sizeof(Instruction));
             code->cur_instruction->exp.invoke->atom = lhs;
-            code->cur_instruction->exp.invoke->params = (Instruction*) malloc(sizeof(Instruction));
-            code->cur_instruction->exp.invoke->params = rhs;
+            code->cur_instruction->exp.invoke->params = (Program*) malloc(sizeof(Program));
+            code->cur_instruction->exp.invoke->params = node->code;
             return code;
         
         case ADD_EXP:
-            // code->cur_instruction->exp.add = (Add*) malloc(sizeof(Add));
-            // code->cur_instruction->exp.add->lhs = (Instruction*) malloc(sizeof(Instruction));
-            // code->cur_instruction->exp.add->lhs = lhs;
-            // code->cur_instruction->exp.add->rhs = (Instruction*) malloc(sizeof(Instruction));
-            // code->cur_instruction->exp.add->rhs = rhs;
+            code->cur_instruction->exp.add = (Add*) malloc(sizeof(Add));
+            code->cur_instruction->exp.add->lhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.add->lhs = lhs;
+            code->cur_instruction->exp.add->rhs = (Instruction*) malloc(sizeof(Instruction));
+            code->cur_instruction->exp.add->rhs = rhs;
             return code;
         
         case SUB_EXP:

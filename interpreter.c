@@ -1,6 +1,7 @@
 #include "interpreter.h"
+#include "syntax.tab.h"
 
-Context* exec_instruction ( Instruction *instruction, Context *context) {
+void exec_instruction ( Instruction *instruction, Context *context) {
     switch (instruction->type)
     {
         case NIL_EXP:
@@ -85,152 +86,334 @@ Context* exec_instruction ( Instruction *instruction, Context *context) {
             return read_exec(instruction, context);
         
         default:
-            return NULL;
+            return;
     }
 }
 
-Context* nil_exec ( Instruction *instruction, Context *context ) {
-    printf("EXECUTANDO NIL\n\n");
-    return NULL;
+void nil_exec ( Instruction *instruction, Context *context ) {
+    return;
 }
 
-Context* int_value_exec ( Instruction *instruction, Context *context ) {
+void int_value_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO INT\n\n");
-    return NULL;
+    context->result = instruction->exp.int_value;
+    return;
 }
 
-Context* int_vector_exec ( Instruction *instruction, Context *context ) {
+void int_vector_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO VECTOR\n\n");
-    return NULL;
+    return;
 }
 
-Context* atom_exec ( Instruction *instruction, Context *context ) {
+void atom_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO ATOM\n\n");
-    return NULL;
+    Local *local = (Local*) malloc(sizeof(Local));
+    contextoAtual = context;
+    local = findParameter(instruction->exp.atom, (Context*) context);
+    if (local != NULL) {
+        context->result = local->value;
+    } else {
+        PRINT_COLOR(KRED);
+        printf("ATOM COULD NOT BE FOUND!\n");
+        PRINT_COLOR(KNRM);
+        return;
+    }
+    return;
 }
 
-Context* invoke_exec ( Instruction *instruction, Context *context ) {
+void invoke_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO INVOKE\n\n");
-    return NULL;
+    int i;
+    int result;
+    char *atom;
+    int params[100];
+    Program *aux = (Program*) malloc(sizeof(Program));
+    aux = instruction->exp.invoke->params;
+    
+    for (i=0; aux != NULL; i++) {
+        params[i] = aux->cur_instruction->exp.int_value;
+        aux = aux->next_instruction;
+    }
+    
+    Function *function = (Function*) malloc(sizeof(Function));
+    function = findAtom(createFnAtomLabel(instruction->exp.invoke->atom->exp.atom, i));
+    
+    Local *new = (Local*) malloc(sizeof(Local));
+    Context *newContext = (Context*) malloc(sizeof(Context));
+
+    if (function != NULL) {
+        if(function->params != NULL) {
+            aux = function->params;
+            contextoAtual = (Context*) malloc(sizeof(Context));
+            contextoAtual = context;
+            while(aux != NULL) {
+                addParameter(aux->cur_instruction->exp.atom, params[i-1]);
+                Local *local = (Local*) malloc(sizeof(Local));
+                local = findParameter(aux->cur_instruction->exp.atom, contextoAtual);
+                aux = aux->next_instruction;
+                i--;
+            }
+        }
+
+        newContext->stack = (Local*) malloc(sizeof(Local));
+        newContext->stack = contextoAtual->stack;
+        STACK_PUSH(contextoAtual, newContext);
+        run(function->code.subroutine, context);
+        result = context->result;
+        STACK_POP(contextoAtual, contextoAtual);
+        context->result = result;
+    } else {
+        PRINT_COLOR(KRED);
+        printf("Function cannot be called!\n");
+        PRINT_COLOR(KNRM);
+        return;
+    }
+
+    return;
 }
 
-Context* add_exec ( Instruction *instruction, Context *context ) {
+void add_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO ADD\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.add->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.add->rhs, context);
+    int rhs = context->result;
+    context->result = lhs + rhs;
+    return;
 }
 
-Context* sub_exec ( Instruction *instruction, Context *context ) {
+void sub_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO SUB\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.sub->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.sub->rhs, context);
+    int rhs = context->result;
+    context->result = (lhs) - (rhs);
+    return;
 }
 
-Context* mul_exec ( Instruction *instruction, Context *context ) {
+void mul_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO MUL\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.mul->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.mul->rhs, context);
+    int rhs = context->result;
+    context->result = lhs * rhs;
+    return;
 }
 
-Context* div_exec ( Instruction *instruction, Context *context ) {
+void div_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO DIV\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.div->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.div->rhs, context);
+    int rhs = context->result;
+    context->result = lhs / rhs;
+    return;
 }
 
-Context* and_exec ( Instruction *instruction, Context *context ) {
+void and_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO AND\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.and->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.and->rhs, context);
+    int rhs = context->result;
+    context->result = lhs && rhs;
+    return;
 }
 
-Context* or_exec ( Instruction *instruction, Context *context ) {
+void or_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO OR\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.or->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.or->rhs, context);
+    int rhs = context->result;
+    context->result = lhs || rhs;
+    return;
 }
 
-Context* not_exec ( Instruction *instruction, Context *context ) {
+void not_exec ( Instruction *instruction, Context *context ) {
+    Context *res;
     printf("EXECUTANDO NOT\n\n");
-    return NULL;
+    res = (Context*) malloc(sizeof(Context));
+    exec_instruction(instruction->exp.not->instruction, context);
+    res = context;
+    context->result = !(res->result);
+    return;
 }
 
-Context* gt_exec ( Instruction *instruction, Context *context ) {
+void gt_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO GT\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.gt->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.gt->rhs, context);
+    int rhs = context->result;
+    context->result = lhs > rhs;
+    return;
 }
 
-Context* lt_exec ( Instruction *instruction, Context *context ) {
+void lt_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO LT\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.lt->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.lt->rhs, context);
+    int rhs = context->result;
+    context->result = lhs < rhs;
+    return;
 }
 
-Context* goeq_exec ( Instruction *instruction, Context *context ) {
+void goeq_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO GOEQ\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.goeq->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.goeq->rhs, context);
+    int rhs = context->result;
+    context->result = lhs >= rhs;
+    return;
 }
 
-Context* loeq_exec ( Instruction *instruction, Context *context ) {
+void loeq_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO LOEQ\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.loeq->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.loeq->rhs, context);
+    int rhs = context->result;
+    context->result = lhs <= rhs;
+    return;
 }
 
-Context* eq_exec ( Instruction *instruction, Context *context ) {
+void eq_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO EQ\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.eq->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.eq->rhs, context);
+    int rhs = context->result;
+    context->result = lhs == rhs;
+    return;
 }
 
-Context* neq_exec ( Instruction *instruction, Context *context ) {
+void neq_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO NEQ\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.neq->lhs, context);
+    int lhs = context->result;
+    exec_instruction(instruction->exp.neq->rhs, context);
+    int rhs = context->result;
+    context->result = lhs != rhs;
+    return;
 }
 
-Context* head_exec ( Instruction *instruction, Context *context ) {
+void head_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO HEAD\n\n");
-    return NULL;
+    return;
 }
 
-Context* tail_exec ( Instruction *instruction, Context *context ) {
+void tail_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO TAIL\n\n");
-    return NULL;
+    return;
 }
 
-Context* cons_exec ( Instruction *instruction, Context *context ) {
+void cons_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO CONS\n\n");
-    return NULL;
+    return;
 }
 
-Context* count_exec ( Instruction *instruction, Context *context ) {
+void count_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO COUNT\n\n");
-    return NULL;
+    Program *aux = (Program*) malloc(sizeof(Program));
+    aux = instruction->exp.count->vector->exp.vector;
+    int i;
+    for (i=0; aux != NULL; i++) {
+        aux = aux->cur_instruction->exp.vector->next_instruction;
+    }
+    context->result = i;
+    return;
 }
 
-Context* map_exec ( Instruction *instruction, Context *context ) {
+void map_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO MAP\n\n");
-    return NULL;
+    return;
 }
 
-Context* filter_exec ( Instruction *instruction, Context *context ) {
+void filter_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO FILTER\n\n");
-    return NULL;
+    return;
 }
 
-Context* ifstmt_exec ( Instruction *instruction, Context *context ) {
+void ifstmt_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO IF\n\n");
-    context = exec_instruction(instruction->exp.ifstmt->ifStmt, context);
-    return NULL;
+    Context *res;
+
+    res = (Context*) malloc(sizeof(Context));
+    exec_instruction(instruction->exp.ifstmt->cond, context);
+    res = context;
+    if (res->result) {
+        exec_instruction(instruction->exp.ifstmt->ifStmt, context);
+        res = context;
+    } else {
+        exec_instruction(instruction->exp.ifstmt->elseStmt, context);
+        res = context;
+    }
+    context->result = res->result;
+    return;
 }
 
-Context* write_exec ( Instruction *instruction, Context *context ) {
+void write_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO WRITE\n\n");
-    return NULL;
+    exec_instruction(instruction->exp.write->instruction, context);
+    printf("=> %d\n\n", context->result);
+    return;
 }
 
-Context* read_exec ( Instruction *instruction, Context *context ) {
+void read_exec ( Instruction *instruction, Context *context ) {
     printf("EXECUTANDO READ\n\n");
+    return;
+}
+
+Function* findAtom(char* atom) {
+    Function* s = (Function*) malloc(sizeof(Function));
+    HASH_FIND_STR(symbolTable, atom, s);
+    if(s != NULL) return s;
     return NULL;
 }
 
+Local* findParameter(char *atom, Context *context) {
+    Local *local = (Local*) malloc(sizeof(Local));
+    HASH_FIND_STR(contextoAtual->stack, atom, local);
+    if (local != NULL) { return local; }
+    return NULL;
+}
 
-int i = 1;
+void addParameter(char* atom, int value) {
+    Local *local = (Local*) malloc(sizeof(Local));
+    local->atom = (char*) strdup(atom);
+    local->value = value;
+    HASH_ADD_STR(contextoAtual->stack, atom, local);
+}
+
+void addAtom(char* atom, Program *code, Program *params) {
+    char errorMessage[400];
+    if(findAtom(atom) == NULL) {
+        Function* s = (Function*) malloc(sizeof(Function));
+        strcpy(s->atom, atom);
+        s->id = symbolID++;
+        s->code.subroutine = code;
+        s->params = params;
+        HASH_ADD_STR(symbolTable, atom, s);
+        if(!hasSymbols) { hasSymbols = TRUE; }
+    } else {
+        snprintf(errorMessage, 400, "\nFunction already declared");
+    }
+}
+
+char* createFnAtomLabel(char* s, int a) {
+    char* str = (char*) malloc(sizeof(char)*60);
+    snprintf(str, 60, "%s/%d", s, a);
+    return str;
+}
 
 void run(Program *program, Context *context) {
     if(program != NULL) {
-        context = exec_instruction(program->cur_instruction, context);
+        exec_instruction(program->cur_instruction, context);
         run(program->next_instruction, context);
     }
 }

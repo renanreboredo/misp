@@ -1,17 +1,32 @@
+( write (sum (1 -2)))
+
 (defn sum
-([x] (/ x 2))
+([] (+ 1 1))
 ([x y] (+ x y))
 )
 
-(defn sum [x y z] (+ x (sum (y, z))))
+(defn sum [x y z] (+ x (sum (y z))))
 
-(map sum [1 x 3 4 5])
+
+(defn sum [x y] (+ x y))
+
+( write (count [ 1 2 3 ]))
+
+( write (sum (1 2 3)))
+
+
+; ( write (sum ()))
+
+; (map sum [1 x 3 4 5])
 (nil)
-(filter sum [1 x 3 4 5])
+; (filter sum [1 x 3 4 5])
 
-(head [1 x 3 4 5])
-(tail [1 x 3 4 5])
-(cons [1 x 3 4 5])
-(count [1 x 3 4 5])
+; (head [1 x 3 4 5])
+; (tail [1 x 3 4 5])
+; (cons [1 x 3 4 5])
+; (count [1 x 3 4 5])
 
-(if (!= 1 2) ? (map sum [1 x 3 4 5]) (filter sum [1 x 3 4 5]))
+(if (!= 1 1) ? ( write (+ 1 0) ) ( write (- 1 1) ))
+
+(write (not (= 1 0)))
+; (* 1 1)

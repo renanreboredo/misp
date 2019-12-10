@@ -53,12 +53,12 @@
 <COMMENT>.                    ;
 
 
-([0-9]{1,})((\.)?[0-9]{1,})?  characters += characterCount(yytext);     printToken("NUM");         yylval.node = (Tree*) malloc(sizeof(Tree));                  strcpy(yylval.node->label, (char*) strdup(yytext));          return NUM;
+("-")?([0-9]{1,})((\.)?[0-9]{1,})?  characters += characterCount(yytext);     printToken("NUM");         yylval.node = (Tree*) malloc(sizeof(Tree));                  strcpy(yylval.node->label, (char*) strdup(yytext));          return NUM;
 "("                           characters += characterCount(yytext);     printToken("(");                                                                        return yytext[0];
 ")"                           characters += characterCount(yytext);     printToken(")");                                                                        return yytext[0];
 "["                           characters += characterCount(yytext);     printToken("[");                                                                        return yytext[0];
 "]"                           characters += characterCount(yytext);     printToken("]");                                                                        return yytext[0];
-","                           characters += characterCount(yytext);     printToken(",");                                                                        return yytext[0];
+"_"                           characters += characterCount(yytext);     printToken("_");                                                                        return yytext[0];
 "defn"                        characters += characterCount(yytext);     printToken("DEFN");                                                                     return DEFN;
 "def"                         characters += characterCount(yytext);     printToken("DEF");                                                                      return DEF;
 "cons"                        characters += characterCount(yytext);     printToken("CONS");                                                                     return CONS;

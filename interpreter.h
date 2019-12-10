@@ -1,6 +1,8 @@
 #include "util.h"
 #include "uthash.h"
+#include "utstack.h"
 
+typedef struct Function Function;
 typedef struct Program Program;
 typedef struct Context Context;
 typedef struct Instruction Instruction;
@@ -29,9 +31,22 @@ typedef struct IfStmt IfStmt;
 typedef struct Write Write;
 typedef struct Read Read;
 
+typedef struct Function {
+    int id;
+    char atom[60];
+    union {
+        int value;
+        Program *subroutine;
+        Program *vector;
+    } code;
+    Program *params;
+    UT_hash_handle hh;
+} Function;
+
+
 struct Invoke {
     Instruction *atom;
-    Instruction *params;
+    Program *params;
 };
 
 typedef struct Add {
@@ -174,7 +189,7 @@ struct Instruction {
         Bool            nil;
         int             int_value;
         Program         *vector;
-        char            *atom;
+        char            atom[100];
         Invoke          *invoke;
         Add             *add;
         Sub             *sub;
@@ -206,44 +221,61 @@ typedef struct Program {
     Program *next_instruction;
 } Program;
 
-typedef struct Context {
+typedef struct Local {
     int id;
-    char atom[60];
-    UT_hash_handle handler;
+    char *atom;
+    int value;
+    UT_hash_handle hh;
+} Local;
+
+typedef struct Context {
+    int result;
+    Local *stack;
+    Context *next;
 } Context;
 
 Program *program;
+Function* symbolTable;
+int symbolID;
+int hasSymbols;
+Bool trace;
 
 // INSTRUCTION EXECUTION FUNCTIONS
 
-Context*           nil_exec     ( Instruction *instruction, Context *context );
-Context*     int_value_exec     ( Instruction *instruction, Context *context );
-Context*    int_vector_exec     ( Instruction *instruction, Context *context );
-Context*          atom_exec     ( Instruction *instruction, Context *context );
-Context*        invoke_exec     ( Instruction *instruction, Context *context );
-Context*           add_exec     ( Instruction *instruction, Context *context );
-Context*           sub_exec     ( Instruction *instruction, Context *context );
-Context*           mul_exec     ( Instruction *instruction, Context *context );
-Context*           div_exec     ( Instruction *instruction, Context *context );
-Context*           and_exec     ( Instruction *instruction, Context *context );
-Context*            or_exec     ( Instruction *instruction, Context *context );
-Context*           not_exec     ( Instruction *instruction, Context *context );
-Context*            gt_exec     ( Instruction *instruction, Context *context );
-Context*            lt_exec     ( Instruction *instruction, Context *context );
-Context*          goeq_exec     ( Instruction *instruction, Context *context );
-Context*          loeq_exec     ( Instruction *instruction, Context *context );
-Context*            eq_exec     ( Instruction *instruction, Context *context );
-Context*           neq_exec     ( Instruction *instruction, Context *context );
-Context*          head_exec     ( Instruction *instruction, Context *context );
-Context*          tail_exec     ( Instruction *instruction, Context *context );
-Context*          cons_exec     ( Instruction *instruction, Context *context );
-Context*         count_exec     ( Instruction *instruction, Context *context );
-Context*           map_exec     ( Instruction *instruction, Context *context );
-Context*        filter_exec     ( Instruction *instruction, Context *context );
-Context*        ifstmt_exec     ( Instruction *instruction, Context *context );
-Context*         write_exec     ( Instruction *instruction, Context *context );
-Context*          read_exec     ( Instruction *instruction, Context *context );
-Context*   exec_instruction     ( Instruction *instruction, Context *context );
+void           nil_exec     ( Instruction *instruction, Context *context );
+void     int_value_exec     ( Instruction *instruction, Context *context );
+void    int_vector_exec     ( Instruction *instruction, Context *context );
+void          atom_exec     ( Instruction *instruction, Context *context );
+void        invoke_exec     ( Instruction *instruction, Context *context );
+void           add_exec     ( Instruction *instruction, Context *context );
+void           sub_exec     ( Instruction *instruction, Context *context );
+void           mul_exec     ( Instruction *instruction, Context *context );
+void           div_exec     ( Instruction *instruction, Context *context );
+void           and_exec     ( Instruction *instruction, Context *context );
+void            or_exec     ( Instruction *instruction, Context *context );
+void           not_exec     ( Instruction *instruction, Context *context );
+void            gt_exec     ( Instruction *instruction, Context *context );
+void            lt_exec     ( Instruction *instruction, Context *context );
+void          goeq_exec     ( Instruction *instruction, Context *context );
+void          loeq_exec     ( Instruction *instruction, Context *context );
+void            eq_exec     ( Instruction *instruction, Context *context );
+void           neq_exec     ( Instruction *instruction, Context *context );
+void          head_exec     ( Instruction *instruction, Context *context );
+void          tail_exec     ( Instruction *instruction, Context *context );
+void          cons_exec     ( Instruction *instruction, Context *context );
+void         count_exec     ( Instruction *instruction, Context *context );
+void           map_exec     ( Instruction *instruction, Context *context );
+void        filter_exec     ( Instruction *instruction, Context *context );
+void        ifstmt_exec     ( Instruction *instruction, Context *context );
+void         write_exec     ( Instruction *instruction, Context *context );
+void          read_exec     ( Instruction *instruction, Context *context );
+void   exec_instruction     ( Instruction *instruction, Context *context );
 
+void addParameter(char* atom, int value);
+Local* findParameter(char* atom, Context* context);
+void addAtom(char* atom, Program *code, Program *params);
+char* createFnAtomLabel(char* s, int a);
+Function* findAtom(char* atom);
+Context* contextoAtual;
 
 void run ( Program *program, Context *context );
